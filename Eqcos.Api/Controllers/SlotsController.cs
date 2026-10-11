@@ -1,14 +1,17 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Eqcos.Api.Models;
 using Eqcos.Api.Data;
 
 namespace Eqcos.Api.Controllers;
 
+public record BookRequest(TimeOnly Time);   // студент присылает только время
+
 [ApiController]
 [Route("api/slots")]
 public class SlotsController : ControllerBase
 {
-    // база данных, её передаёт сам ASP.NET (мы зарегистрировали её в Program.cs)
     private readonly AppDbContext _db;
 
     public SlotsController(AppDbContext db)
@@ -16,14 +19,10 @@ public class SlotsController : ControllerBase
         _db = db;
     }
 
-    // все слоты
-    [HttpGet]
-    public IActionResult GetAll()
-    {
-        return Ok(GetSlots(15).Select(t => t.ToString("HH:mm")));
-    }
+    // Id пользователя из пропуска
+    private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    // свободные слоты
+    // ГОСТЬ и все: свободное время
     [HttpGet("free")]
     public IActionResult GetFree()
     {
@@ -32,44 +31,78 @@ public class SlotsController : ControllerBase
         return Ok(free.Select(t => t.ToString("HH:mm")));
     }
 
-    // записаться
+    // СТУДЕНТ: записаться
+    [Authorize(Roles = "Student")]
     [HttpPost("book")]
-    public IActionResult Book(Booking request)
+    public IActionResult Book(BookRequest request)
     {
         if (!GetSlots(15).Contains(request.Time))
             return BadRequest("Такого времени нет");
 
-        var my = _db.Bookings.FirstOrDefault(b => b.StudentId == request.StudentId);
+        var my = _db.Bookings.FirstOrDefault(b => b.StudentId == CurrentUserId);
         if (my != null)
             return BadRequest($"Вы уже записаны на {my.Time:HH:mm}");
 
         if (_db.Bookings.Any(b => b.Time == request.Time))
             return BadRequest("Время занято");
 
-        request.Id = 0;              // Id выдаст сама база
-        _db.Bookings.Add(request);
-        _db.SaveChanges();           // записали в PostgreSQL
+        var user = _db.Users.Find(CurrentUserId)!;   // ФИО и группу берём из базы
+        _db.Bookings.Add(new Booking
+        {
+            Time = request.Time,
+            StudentId = user.Id,
+            StudentName = user.FullName,
+            Group = user.Group
+        });
+        _db.SaveChanges();
         return Ok($"Вы записаны на {request.Time:HH:mm}");
     }
 
-    // все записи
-    [HttpGet("bookings")]
-    public IActionResult GetBookings()
+    // СТУДЕНТ: моя запись
+    [Authorize(Roles = "Student")]
+    [HttpGet("my")]
+    public IActionResult GetMy()
     {
-        return Ok(_db.Bookings.OrderBy(b => b.Time).ToList());
+        var my = _db.Bookings.FirstOrDefault(b => b.StudentId == CurrentUserId);
+        if (my == null)
+            return Ok("У вас нет записи");
+        return Ok($"Вы записаны на {my.Time:HH:mm}");
     }
 
-    // отменить запись
-    [HttpDelete("book/{studentId}")]
-    public IActionResult Cancel(int studentId)
+    // СТУДЕНТ: отменить свою запись
+    [Authorize(Roles = "Student")]
+    [HttpDelete("my")]
+    public IActionResult CancelMy()
     {
-        var my = _db.Bookings.FirstOrDefault(b => b.StudentId == studentId);
+        var my = _db.Bookings.FirstOrDefault(b => b.StudentId == CurrentUserId);
         if (my == null)
             return NotFound("У вас нет записи");
 
         _db.Bookings.Remove(my);
         _db.SaveChanges();
         return Ok($"Запись на {my.Time:HH:mm} отменена");
+    }
+
+    // АДМИН: все записи с именами
+    [Authorize(Roles = "Admin")]
+    [HttpGet("bookings")]
+    public IActionResult GetBookings()
+    {
+        return Ok(_db.Bookings.OrderBy(b => b.Time).ToList());
+    }
+
+    // АДМИН: удалить любую запись по её Id
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("bookings/{id}")]
+    public IActionResult DeleteBooking(int id)
+    {
+        var b = _db.Bookings.Find(id);
+        if (b == null)
+            return NotFound("Запись не найдена");
+
+        _db.Bookings.Remove(b);
+        _db.SaveChanges();
+        return Ok($"Запись {b.StudentName} на {b.Time:HH:mm} удалена");
     }
 
     private List<TimeOnly> GetSlots(int slotMinutes)
