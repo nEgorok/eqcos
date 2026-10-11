@@ -1,7 +1,25 @@
 ﻿@page "/"
 @inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
 
 <PageTitle>Запись в учебную часть</PageTitle>
+
+@if (Auth.IsLoggedIn && Auth.Role == "Student")
+{
+    <div class="alert alert-info">
+        @myBooking
+        @if (hasBooking)
+        {
+            <button class="btn btn-sm btn-outline-danger ms-3" @onclick="Cancel">Отменить запись</button>
+        }
+    </div>
+}
+
+@if (message != null)
+{
+    <div class="alert alert-secondary">@message</div>
+}
 
 <h1>Свободное время</h1>
 
@@ -18,17 +36,54 @@ else
     <div>
         @foreach (var s in slots)
         {
-            <button class="btn btn-outline-primary m-1">@s</button>
+            <button class="btn btn-outline-primary m-1" @onclick="() => Book(s)">@s</button>
         }
     </div>
 }
 
 @code {
-    private List<string>? slots;   // null = ещё грузится
+    private List<string>? slots;     // свободное время
+    private string? myBooking;       // текст "Вы записаны на ..." / "У вас нет записи"
+    private bool hasBooking;         // есть ли запись (чтобы показать кнопку отмены)
+    private string? message;         // ответ сервера после действия
 
-    // выполняется один раз при открытии страницы
     protected override async Task OnInitializedAsync()
     {
+        await LoadAll();
+    }
+
+    // загрузить свободное время и (если студент) свою запись
+    private async Task LoadAll()
+    {
         slots = await Http.GetFromJsonAsync<List<string>>("api/slots/free");
+
+        if (Auth.IsLoggedIn && Auth.Role == "Student")
+        {
+            myBooking = await Http.GetStringAsync("api/slots/my");
+            hasBooking = myBooking.StartsWith("Вы записаны");
+        }
+    }
+
+    // клик по времени
+    private async Task Book(string time)
+    {
+        if (!Auth.IsLoggedIn)
+        {
+            Nav.NavigateTo("login");   // гостя — на вход
+            return;
+        }
+
+        // сервер ждёт время в виде "10:15:00"
+        var resp = await Http.PostAsJsonAsync("api/slots/book", new { time = time + ":00" });
+        message = await resp.Content.ReadAsStringAsync();
+        await LoadAll();   // обновить кнопки и "мою запись"
+    }
+
+    // отмена своей записи
+    private async Task Cancel()
+    {
+        var resp = await Http.DeleteAsync("api/slots/my");
+        message = await resp.Content.ReadAsStringAsync();
+        await LoadAll();
     }
 }
