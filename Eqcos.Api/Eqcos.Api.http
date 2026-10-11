@@ -17,3 +17,22 @@ GET https://localhost:7227/api/slots/bookings
 
 ### Отменить запись студента 5
 DELETE https://localhost:7227/api/slots/book/5
+### Регистрация
+POST https://localhost:7227/api/auth/register
+Content-Type: application/json
+
+{
+  "login": "12345",
+  "password": "qwerty",
+  "fullName": "Егор Тестов",
+  "group": "348Кп"
+}
+
+### Вход
+POST https://localhost:7227/api/auth/login
+Content-Type: application/json
+
+{
+  "login": "12345",
+  "password": "qwerty"
+}
