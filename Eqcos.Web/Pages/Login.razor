@@ -1,0 +1,30 @@
+﻿@page "/login"
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Вход</PageTitle>
+<h1>Вход</h1>
+
+<div style="max-width:320px">
+    <input class="form-control mb-2" placeholder="Номер студенческого" @bind="login" />
+    <input class="form-control mb-2" type="password" placeholder="Пароль" @bind="password" />
+    <button class="btn btn-primary" @onclick="DoLogin">Войти</button>
+
+    @if (error != null)
+    {
+        <div class="text-danger mt-2">@error</div>
+    }
+</div>
+
+@code {
+    private string login = "";
+    private string password = "";
+    private string? error;
+
+    private async Task DoLogin()
+    {
+        error = await Auth.Login(login, password);
+        if (error == null)
+            Nav.NavigateTo("/");   // вошли — на главную
+    }
+}
