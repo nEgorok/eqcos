@@ -1,0 +1,52 @@
+﻿@page "/register"
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Регистрация</PageTitle>
+<h1>Регистрация</h1>
+
+<div style="max-width:320px">
+    <input class="form-control mb-2" placeholder="ФИО" @bind="fullName" />
+    <input class="form-control mb-2" placeholder="Группа" @bind="group" />
+    <input class="form-control mb-2" placeholder="Номер студенческого" @bind="login" />
+    <input class="form-control mb-2" type="password" placeholder="Пароль" @bind="password" />
+    <button class="btn btn-primary" @onclick="DoRegister">Зарегистрироваться</button>
+
+    @if (error != null)
+    {
+        <div class="text-danger mt-2">@error</div>
+    }
+</div>
+
+@code {
+    private string fullName = "";
+    private string group = "";
+    private string login = "";
+    private string password = "";
+    private string? error;
+
+    private async Task DoRegister()
+    {
+        // простая проверка, что всё заполнено
+        if (fullName == "" || group == "" || login == "" || password == "")
+        {
+            error = "Заполните все поля";
+            return;
+        }
+
+        var resp = await Http.PostAsJsonAsync("api/auth/register",
+            new { login, password, fullName, group });
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            error = await resp.Content.ReadAsStringAsync();   // например "уже зарегистрирован"
+            return;
+        }
+
+        // сразу входим, чтобы не вводить пароль второй раз
+        error = await Auth.Login(login, password);
+        if (error == null)
+            Nav.NavigateTo("/");
+    }
+}
