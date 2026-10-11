@@ -1,6 +1,19 @@
-@Eqcos.Api_HostAddress = http://localhost:5270
+### Свободные слоты
+GET https://localhost:7227/api/slots/free
 
-GET {{Eqcos.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Записаться
+POST https://localhost:7227/api/slots/book
+Content-Type: application/json
 
-###
+{
+  "time": "10:45:00",
+  "studentName": "Егор",
+  "group": "348Кп",
+  "studentId": 5
+}
+
+### Все записи
+GET https://localhost:7227/api/slots/bookings
+
+### Отменить запись студента 5
+DELETE https://localhost:7227/api/slots/book/5
