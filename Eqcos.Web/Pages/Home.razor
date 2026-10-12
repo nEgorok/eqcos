@@ -5,15 +5,23 @@
 
 <PageTitle>Запись в учебную часть</PageTitle>
 
-@if (Auth.IsLoggedIn && Auth.Role == "Student")
+@* ---- Мои записи (студент) ---- *@
+@if (Auth.IsLoggedIn && Auth.Role == "Student" && myBookings != null)
 {
-    <div class="alert alert-info">
-        @myBooking
-        @if (hasBooking)
-        {
-            <button class="btn btn-sm btn-outline-danger ms-3" @onclick="Cancel">Отменить запись</button>
-        }
-    </div>
+    @if (myBookings.Count == 0)
+    {
+        <div class="alert alert-info">У вас нет записи</div>
+    }
+    @foreach (var b in myBookings)
+    {
+        <div class="alert @(b.CanCancel ? "alert-info" : "alert-warning")">
+            @(b.CanCancel ? "Вы записаны: " : "Вас вызывают: ")@b.Text
+            @if (b.CanCancel)
+            {
+                <button class="btn btn-sm btn-outline-danger ms-3" @onclick="() => Cancel(b.Id)">Отменить запись</button>
+            }
+        </div>
+    }
 }
 
 @if (message != null)
@@ -71,7 +79,6 @@ else if (slots.Count == 0)
 }
 else
 {
-    @* группируем по часу: "08:05" -> "08" *@
     @foreach (var hour in slots.GroupBy(s => s.Substring(0, 2)))
     {
         <div class="mb-2">
@@ -85,21 +92,20 @@ else
 }
 
 @code {
-    // такой же корпус, как Office на сервере (берём только нужное)
     private record OfficeDto(int Id, string Name);
     private record PurposeDto(int Id, string Name, int Minutes);
+    private record MyBookingDto(int Id, string Text, bool CanCancel);   // как MyBooking на сервере
 
-    private List<PurposeDto>? purposes;
-    private int purposeId = 0;   // 0 = цель ещё не выбрана
     private List<OfficeDto>? offices;
-    private int officeId = 1;                                        // выбранный корпус
+    private List<PurposeDto>? purposes;
+    private int officeId = 1;
+    private int purposeId = 0;
     private static DateOnly today = DateOnly.FromDateTime(DateTime.Now);
-    private DateOnly date = today;                                   // выбранный день
+    private DateOnly date = today;
 
-    private List<string>? slots;     // свободное время
-    private string? myBooking;       // "Вы записаны: ..." / "У вас нет записи"
-    private bool hasBooking;         // показывать ли кнопку отмены
-    private string? message;         // ответ сервера после действия
+    private List<string>? slots;
+    private List<MyBookingDto>? myBookings;   // своя запись + вызовы
+    private string? message;
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,21 +114,16 @@ else
         await LoadAll();
     }
 
-    // загрузить свободное время выбранного корпуса и дня + свою запись
     private async Task LoadAll()
     {
-        slots = null;   // пока грузится — "Загрузка..."
+        slots = null;
         slots = await Http.GetFromJsonAsync<List<string>>(
             $"api/slots/free?officeId={officeId}&date={date:yyyy-MM-dd}");
 
         if (Auth.IsLoggedIn && Auth.Role == "Student")
-        {
-            myBooking = await Http.GetStringAsync("api/slots/my");
-            hasBooking = myBooking.StartsWith("Вы записаны");
-        }
+            myBookings = await Http.GetFromJsonAsync<List<MyBookingDto>>("api/slots/my");
     }
 
-    // клик по вкладке корпуса
     private async Task SelectOffice(int id)
     {
         officeId = id;
@@ -130,7 +131,6 @@ else
         await LoadAll();
     }
 
-    // выбрали другой день в календаре
     private async Task DateChanged(ChangeEventArgs e)
     {
         if (DateOnly.TryParse(e.Value?.ToString(), out var d))
@@ -141,12 +141,11 @@ else
         }
     }
 
-       // клик по времени
     private async Task Book(string time)
     {
         if (!Auth.IsLoggedIn)
         {
-            Nav.NavigateTo("login");   // гостя — на вход
+            Nav.NavigateTo("login");
             return;
         }
 
@@ -167,10 +166,10 @@ else
         await LoadAll();
     }
 
-    // отмена своей записи
-    private async Task Cancel()
+    // отмена своей записи по её Id
+    private async Task Cancel(int id)
     {
-        var resp = await Http.DeleteAsync("api/slots/my");
+        var resp = await Http.DeleteAsync($"api/slots/my/{id}");
         message = await resp.Content.ReadAsStringAsync();
         await LoadAll();
     }

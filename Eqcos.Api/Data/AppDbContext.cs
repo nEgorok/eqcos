@@ -25,7 +25,7 @@ public class AppDbContext : DbContext
             new Purpose { Id = 1, Name = "Подпись заявления на уход с пар", Minutes = 5 },
             new Purpose { Id = 2, Name = "Направление на исправление оценки", Minutes = 5 },
             new Purpose { Id = 3, Name = "Форма №6", Minutes = 5 },
-            new Purpose { Id = 4, Name = "Профилактическая беседа (вызов)", Minutes = 30, AdminOnly = true }
+            new Purpose { Id = 4, Name = "Профилактическая беседа", Minutes = 30, AdminOnly = true }
         );
     }
 }

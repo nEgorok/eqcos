@@ -17,6 +17,19 @@ else
                @onchange="DateChanged" />
     </div>
 
+    @* ---- Назначить вызов ---- *@
+    <div class="card mb-3" style="max-width:520px">
+        <div class="card-body">
+            <h5 class="card-title">Вызов на профбеседу (30 минут)</h5>
+            <div class="d-flex gap-2">
+                <input class="form-control" placeholder="Номер студенческого" @bind="summonLogin" />
+                <input type="time" step="300" class="form-control" style="max-width:130px" @bind="summonTime" />
+                <button class="btn btn-warning" @onclick="Summon">Вызвать</button>
+            </div>
+            <small class="text-muted">На выбранный выше день</small>
+        </div>
+    </div>
+
     @if (message != null)
     {
         <div class="alert alert-secondary">@message</div>
@@ -61,12 +74,14 @@ else
 }
 
 @code {
-    // такая же запись, как Booking на сервере
-        private record BookingDto(int Id, TimeOnly Time, string StudentName, string Group, string Purpose);
+    private record BookingDto(int Id, TimeOnly Time, string StudentName, string Group, string Purpose);
 
-    private DateOnly date = DateOnly.FromDateTime(DateTime.Now);   // выбранный день
+    private DateOnly date = DateOnly.FromDateTime(DateTime.Now);
     private List<BookingDto>? bookings;
     private string? message;
+
+    private string summonLogin = "";      // номер студенческого
+    private TimeOnly summonTime = new TimeOnly(14, 0);  // время вызова
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,6 +103,25 @@ else
             message = null;
             await Load();
         }
+    }
+
+    // назначить вызов
+    private async Task Summon()
+    {
+        if (summonLogin == "")
+        {
+            message = "Введите номер студенческого";
+            return;
+        }
+
+        var resp = await Http.PostAsJsonAsync("api/slots/summon", new
+        {
+            studentLogin = summonLogin,
+            date = date.ToString("yyyy-MM-dd"),
+            time = summonTime.ToString("HH:mm:ss")
+        });
+        message = await resp.Content.ReadAsStringAsync();
+        await Load();
     }
 
     private async Task Delete(int id)

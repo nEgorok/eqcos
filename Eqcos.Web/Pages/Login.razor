@@ -25,6 +25,6 @@
     {
         error = await Auth.Login(login, password);
         if (error == null)
-            Nav.NavigateTo("/");   // вошли — на главную
+            Nav.NavigateTo(Auth.Role == "Admin" ? "/admin" : "/");   // админ — к записям, студент — на главную
     }
 }

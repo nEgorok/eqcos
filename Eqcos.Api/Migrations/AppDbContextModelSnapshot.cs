@@ -165,7 +165,7 @@ namespace Eqcos.Api.Migrations
                             Id = 4,
                             AdminOnly = true,
                             Minutes = 30,
-                            Name = "Профилактическая беседа (вызов)"
+                            Name = "Профилактическая беседа"
                         });
                 });
 

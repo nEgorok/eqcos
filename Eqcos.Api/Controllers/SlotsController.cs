@@ -9,6 +9,12 @@ namespace Eqcos.Api.Controllers;
 // студент присылает: корпус, день, время, цель
 public record BookRequest(int OfficeId, DateOnly Date, TimeOnly Time, int PurposeId);
 
+// админ присылает: номер студенческого, день, время (корпус берём из его пропуска)
+public record SummonRequest(string StudentLogin, DateOnly Date, TimeOnly Time);
+
+// одна запись студента для главной страницы
+public record MyBooking(int Id, string Text, bool CanCancel);
+
 [ApiController]
 [Route("api")]
 public class SlotsController : ControllerBase
@@ -31,24 +37,23 @@ public class SlotsController : ControllerBase
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
 
-    // НОВОЕ: название цели по Id ("—", если цели нет)
-    private string PurposeName(int id) => _db.Purposes.Find(id)?.Name ?? "—";
+    // ---------- ВСЕ ----------
 
-    // ВСЕ: список корпусов
+    // список корпусов
     [HttpGet("offices")]
     public IActionResult GetOffices()
     {
         return Ok(_db.Offices.OrderBy(o => o.Id).ToList());
     }
 
-    // НОВОЕ. ВСЕ: цели, которые может выбрать студент (без "только админ")
+    // цели, которые может выбрать студент (без "только админ")
     [HttpGet("purposes")]
     public IActionResult GetPurposes()
     {
         return Ok(_db.Purposes.Where(p => !p.AdminOnly).OrderBy(p => p.Id).ToList());
     }
 
-    // ВСЕ: свободное время в корпусе на день
+    // свободные 5-минутные клетки в корпусе на день
     [HttpGet("slots/free")]
     public IActionResult GetFree(int officeId, DateOnly date)
     {
@@ -59,12 +64,9 @@ public class SlotsController : ControllerBase
         if (date < Today)
             return Ok(new List<string>());
 
-        var taken = _db.Bookings
-            .Where(b => b.OfficeId == officeId && b.Date == date)
-            .Select(b => b.Time)
-            .ToList();
+        var busy = Busy(officeId, date);   // занятые отрезки этого дня
 
-        var free = GetSlots(office).Where(t => !taken.Contains(t));
+        var free = GetSlots(office).Where(t => !Overlaps(busy, t, t.AddMinutes(Step)));
 
         if (date == Today)
             free = free.Where(t => t > TimeOnly.FromDateTime(DateTime.Now));
@@ -72,7 +74,9 @@ public class SlotsController : ControllerBase
         return Ok(free.Select(t => t.ToString("HH:mm")));
     }
 
-    // СТУДЕНТ: записаться
+    // ---------- СТУДЕНТ ----------
+
+    // записаться
     [Authorize(Roles = "Student")]
     [HttpPost("slots/book")]
     public IActionResult Book(BookRequest r)
@@ -81,7 +85,6 @@ public class SlotsController : ControllerBase
         if (office == null)
             return BadRequest("Корпус не найден");
 
-        // НОВОЕ: цель должна существовать и быть доступной студенту
         var purpose = _db.Purposes.Find(r.PurposeId);
         if (purpose == null || purpose.AdminOnly)
             return BadRequest("Выберите цель визита");
@@ -89,14 +92,19 @@ public class SlotsController : ControllerBase
         if (r.Date < Today)
             return BadRequest("Нельзя записаться на прошедший день");
 
-        if (!GetSlots(office).Contains(r.Time))
+        if (!Fits(office, r.Time, purpose.Minutes))
             return BadRequest("Такого времени нет");
 
-        var my = _db.Bookings.FirstOrDefault(b => b.StudentId == CurrentUserId && b.Date >= Today);
+        // одна СВОЯ запись (вызовы не считаются)
+        var adminOnly = AdminOnlyIds();
+        var my = _db.Bookings
+            .Where(b => b.StudentId == CurrentUserId && b.Date >= Today)
+            .ToList()
+            .FirstOrDefault(b => !adminOnly.Contains(b.PurposeId));
         if (my != null)
             return BadRequest($"Вы уже записаны на {my.Date:dd.MM} в {my.Time:HH:mm}");
 
-        if (_db.Bookings.Any(b => b.OfficeId == r.OfficeId && b.Date == r.Date && b.Time == r.Time))
+        if (Overlaps(Busy(r.OfficeId, r.Date), r.Time, r.Time.AddMinutes(purpose.Minutes)))
             return BadRequest("Время занято");
 
         var user = _db.Users.Find(CurrentUserId)!;
@@ -105,7 +113,7 @@ public class SlotsController : ControllerBase
             OfficeId = r.OfficeId,
             Date = r.Date,
             Time = r.Time,
-            PurposeId = r.PurposeId,   // НОВОЕ
+            PurposeId = r.PurposeId,
             StudentId = user.Id,
             StudentName = user.FullName,
             Group = user.Group
@@ -114,34 +122,46 @@ public class SlotsController : ControllerBase
         return Ok($"Вы записаны: {office.Name}, {r.Date:dd.MM} в {r.Time:HH:mm} ({purpose.Name})");
     }
 
-    // СТУДЕНТ: моя запись
+    // мои записи (своя + вызовы), начиная с сегодня
     [Authorize(Roles = "Student")]
     [HttpGet("slots/my")]
     public IActionResult GetMy()
     {
-        var my = _db.Bookings.FirstOrDefault(b => b.StudentId == CurrentUserId && b.Date >= Today);
-        if (my == null)
-            return Ok("У вас нет записи");
+        var adminOnly = AdminOnlyIds();
 
-        var office = _db.Offices.Find(my.OfficeId);
-        return Ok($"Вы записаны: {office?.Name}, {my.Date:dd.MM} в {my.Time:HH:mm} ({PurposeName(my.PurposeId)})");
+        var list = _db.Bookings
+            .Where(b => b.StudentId == CurrentUserId && b.Date >= Today)
+            .OrderBy(b => b.Date).ThenBy(b => b.Time)
+            .ToList();
+
+        var result = list.Select(b => new MyBooking(
+            b.Id,
+            $"{OfficeName(b.OfficeId)}, {b.Date:dd.MM} в {b.Time:HH:mm} ({PurposeName(b.PurposeId)})",
+            !adminOnly.Contains(b.PurposeId)));   // вызов отменить нельзя
+
+        return Ok(result);
     }
 
-    // СТУДЕНТ: отменить свою запись
+    // отменить СВОЮ запись по Id
     [Authorize(Roles = "Student")]
-    [HttpDelete("slots/my")]
-    public IActionResult CancelMy()
+    [HttpDelete("slots/my/{id}")]
+    public IActionResult CancelMy(int id)
     {
-        var my = _db.Bookings.FirstOrDefault(b => b.StudentId == CurrentUserId && b.Date >= Today);
-        if (my == null)
-            return NotFound("У вас нет записи");
+        var b = _db.Bookings.Find(id);
+        if (b == null || b.StudentId != CurrentUserId)
+            return NotFound("Запись не найдена");
 
-        _db.Bookings.Remove(my);
+        if (AdminOnlyIds().Contains(b.PurposeId))
+            return BadRequest("Вызов может отменить только учебная часть");
+
+        _db.Bookings.Remove(b);
         _db.SaveChanges();
-        return Ok($"Запись на {my.Date:dd.MM} в {my.Time:HH:mm} отменена");
+        return Ok($"Запись на {b.Date:dd.MM} в {b.Time:HH:mm} отменена");
     }
 
-    // АДМИН: записи СВОЕГО корпуса на день (НОВОЕ: + название цели)
+    // ---------- АДМИН ----------
+
+    // записи СВОЕГО корпуса на день
     [Authorize(Roles = "Admin")]
     [HttpGet("slots/bookings")]
     public IActionResult GetBookings(DateOnly date)
@@ -151,7 +171,6 @@ public class SlotsController : ControllerBase
             .OrderBy(b => b.Time)
             .ToList();
 
-        // собираем для каждой записи "запись + название цели"
         return Ok(list.Select(b => new
         {
             b.Id,
@@ -162,7 +181,45 @@ public class SlotsController : ControllerBase
         }));
     }
 
-    // АДМИН: удалить запись своего корпуса
+    // поставить студенту вызов на профбеседу
+    [Authorize(Roles = "Admin")]
+    [HttpPost("slots/summon")]
+    public IActionResult Summon(SummonRequest r)
+    {
+        var office = _db.Offices.Find(CurrentOfficeId);
+        if (office == null)
+            return BadRequest("У учётной записи не указан корпус");
+
+        var student = _db.Users.FirstOrDefault(u => u.Login == r.StudentLogin && u.Role == "Student");
+        if (student == null)
+            return BadRequest("Студент с таким номером не найден");
+
+        var purpose = _db.Purposes.First(p => p.AdminOnly);   // профбеседа
+
+        if (r.Date < Today)
+            return BadRequest("Нельзя назначить на прошедший день");
+
+        if (!Fits(office, r.Time, purpose.Minutes))
+            return BadRequest($"{purpose.Minutes} минут с {r.Time:HH:mm} не помещаются в рабочее время");
+
+        if (Overlaps(Busy(office.Id, r.Date), r.Time, r.Time.AddMinutes(purpose.Minutes)))
+            return BadRequest("Это время пересекается с другой записью");
+
+        _db.Bookings.Add(new Booking
+        {
+            OfficeId = office.Id,
+            Date = r.Date,
+            Time = r.Time,
+            PurposeId = purpose.Id,
+            StudentId = student.Id,
+            StudentName = student.FullName,
+            Group = student.Group
+        });
+        _db.SaveChanges();
+        return Ok($"Вызов назначен: {student.FullName}, {r.Date:dd.MM} в {r.Time:HH:mm}");
+    }
+
+    // удалить запись своего корпуса (в том числе вызов)
     [Authorize(Roles = "Admin")]
     [HttpDelete("slots/bookings/{id}")]
     public IActionResult DeleteBooking(int id)
@@ -176,7 +233,46 @@ public class SlotsController : ControllerBase
         return Ok($"Запись {b.StudentName} на {b.Date:dd.MM} в {b.Time:HH:mm} удалена");
     }
 
-    // все слоты корпуса с шагом Step, без перерыва
+    // ---------- ПОМОЩНИКИ ----------
+
+    private string PurposeName(int id) => _db.Purposes.Find(id)?.Name ?? "—";
+    private string OfficeName(int id) => _db.Offices.Find(id)?.Name ?? "—";
+
+    // Id целей "только админ" (сейчас это одна профбеседа)
+    private List<int> AdminOnlyIds() =>
+        _db.Purposes.Where(p => p.AdminOnly).Select(p => p.Id).ToList();
+
+    // занятые отрезки (начало, конец) в корпусе на день
+    private List<(TimeOnly Start, TimeOnly End)> Busy(int officeId, DateOnly date)
+    {
+        var minutes = _db.Purposes.ToDictionary(p => p.Id, p => p.Minutes);
+
+        return _db.Bookings
+            .Where(b => b.OfficeId == officeId && b.Date == date)
+            .ToList()
+            .Select(b => (b.Time, b.Time.AddMinutes(minutes.GetValueOrDefault(b.PurposeId, Step))))
+            .ToList();
+    }
+
+    // пересекается ли start..end хоть с одним занятым отрезком
+    private static bool Overlaps(List<(TimeOnly Start, TimeOnly End)> busy, TimeOnly start, TimeOnly end)
+    {
+        return busy.Any(x => start < x.End && x.Start < end);
+    }
+
+    // помещается ли приём длиной minutes целиком в рабочее время (без перерыва)
+    private static bool Fits(Office office, TimeOnly start, int minutes)
+    {
+        var slots = GetSlots(office);
+        for (var t = start; t < start.AddMinutes(minutes); t = t.AddMinutes(Step))
+        {
+            if (!slots.Contains(t))
+                return false;
+        }
+        return true;
+    }
+
+    // все клетки корпуса с шагом Step, без перерыва
     private static List<TimeOnly> GetSlots(Office office)
     {
         var slots = new List<TimeOnly>();
