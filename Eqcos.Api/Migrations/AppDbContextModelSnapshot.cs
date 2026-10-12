@@ -30,9 +30,15 @@ namespace Eqcos.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
                     b.Property<string>("Group")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("OfficeId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("StudentId")
                         .HasColumnType("integer");
@@ -47,6 +53,64 @@ namespace Eqcos.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Bookings");
+                });
+
+            modelBuilder.Entity("Eqcos.Api.Models.Office", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<TimeOnly>("BreakEnd")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly>("BreakStart")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly>("Close")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<TimeOnly>("Open")
+                        .HasColumnType("time without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Offices");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BreakEnd = new TimeOnly(13, 0, 0),
+                            BreakStart = new TimeOnly(11, 0, 0),
+                            Close = new TimeOnly(16, 30, 0),
+                            Name = "Главный корпус",
+                            Open = new TimeOnly(8, 0, 0)
+                        },
+                        new
+                        {
+                            Id = 2,
+                            BreakEnd = new TimeOnly(13, 0, 0),
+                            BreakStart = new TimeOnly(11, 0, 0),
+                            Close = new TimeOnly(16, 30, 0),
+                            Name = "Лабораторный корпус",
+                            Open = new TimeOnly(8, 0, 0)
+                        },
+                        new
+                        {
+                            Id = 3,
+                            BreakEnd = new TimeOnly(13, 0, 0),
+                            BreakStart = new TimeOnly(11, 0, 0),
+                            Close = new TimeOnly(16, 30, 0),
+                            Name = "Второй корпус",
+                            Open = new TimeOnly(8, 0, 0)
+                        });
                 });
 
             modelBuilder.Entity("Eqcos.Api.Models.User", b =>
@@ -68,6 +132,9 @@ namespace Eqcos.Api.Migrations
                     b.Property<string>("Login")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int?>("OfficeId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()

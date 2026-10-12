@@ -42,3 +42,19 @@ Authorization: Bearer {{token}}
 ### Удалить запись (админ)
 DELETE https://localhost:7227/api/slots/bookings/1
 Authorization: Bearer {{token}}
+### 1. Корпуса
+GET https://localhost:7227/api/offices
+
+### 2. Свободное время: Главный корпус, 13 октября
+GET https://localhost:7227/api/slots/free?officeId=1&date=2026-10-13
+
+### 5. Записаться: Главный, 13 октября, 08:15
+POST https://localhost:7227/api/slots/book
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "officeId": 1, "date": "2026-10-13", "time": "08:15:00" }
+
+### 8. Записи моего корпуса на 13 октября (админ)
+GET https://localhost:7227/api/slots/bookings?date=2026-10-13
+Authorization: Bearer {{token}}
