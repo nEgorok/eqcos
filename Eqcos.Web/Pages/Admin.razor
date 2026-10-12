@@ -38,6 +38,7 @@ else
                     <th>Время</th>
                     <th>ФИО</th>
                     <th>Группа</th>
+                    <th>Цель</th>
                     <th></th>
                 </tr>
             </thead>
@@ -48,6 +49,7 @@ else
                         <td>@b.Time.ToString("HH:mm")</td>
                         <td>@b.StudentName</td>
                         <td>@b.Group</td>
+                        <td>@b.Purpose</td>
                         <td>
                             <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(b.Id)">Удалить</button>
                         </td>
@@ -60,8 +62,7 @@ else
 
 @code {
     // такая же запись, как Booking на сервере
-    private record BookingDto(int Id, int OfficeId, DateOnly Date, TimeOnly Time,
-                              string StudentName, string Group, int StudentId);
+        private record BookingDto(int Id, TimeOnly Time, string StudentName, string Group, string Purpose);
 
     private DateOnly date = DateOnly.FromDateTime(DateTime.Now);   // выбранный день
     private List<BookingDto>? bookings;

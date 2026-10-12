@@ -9,5 +9,5 @@ public class Booking
     public int StudentId { get; set; }
     public int OfficeId { get; set; }   // в какой корпус
     public DateOnly Date { get; set; }  // на какой день
-
+    public int PurposeId { get; set; }  // цель визита
 }

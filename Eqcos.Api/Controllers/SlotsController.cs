@@ -6,8 +6,8 @@ using Eqcos.Api.Data;
 
 namespace Eqcos.Api.Controllers;
 
-// студент присылает: корпус, день, время
-public record BookRequest(int OfficeId, DateOnly Date, TimeOnly Time);
+// студент присылает: корпус, день, время, цель
+public record BookRequest(int OfficeId, DateOnly Date, TimeOnly Time, int PurposeId);
 
 [ApiController]
 [Route("api")]
@@ -31,6 +31,9 @@ public class SlotsController : ControllerBase
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
 
+    // НОВОЕ: название цели по Id ("—", если цели нет)
+    private string PurposeName(int id) => _db.Purposes.Find(id)?.Name ?? "—";
+
     // ВСЕ: список корпусов
     [HttpGet("offices")]
     public IActionResult GetOffices()
@@ -38,8 +41,14 @@ public class SlotsController : ControllerBase
         return Ok(_db.Offices.OrderBy(o => o.Id).ToList());
     }
 
+    // НОВОЕ. ВСЕ: цели, которые может выбрать студент (без "только админ")
+    [HttpGet("purposes")]
+    public IActionResult GetPurposes()
+    {
+        return Ok(_db.Purposes.Where(p => !p.AdminOnly).OrderBy(p => p.Id).ToList());
+    }
+
     // ВСЕ: свободное время в корпусе на день
-    // пример: GET api/slots/free?officeId=1&date=2026-10-13
     [HttpGet("slots/free")]
     public IActionResult GetFree(int officeId, DateOnly date)
     {
@@ -48,7 +57,7 @@ public class SlotsController : ControllerBase
             return NotFound("Корпус не найден");
 
         if (date < Today)
-            return Ok(new List<string>());   // прошедший день — ничего нет
+            return Ok(new List<string>());
 
         var taken = _db.Bookings
             .Where(b => b.OfficeId == officeId && b.Date == date)
@@ -57,7 +66,6 @@ public class SlotsController : ControllerBase
 
         var free = GetSlots(office).Where(t => !taken.Contains(t));
 
-        // сегодня не показываем время, которое уже прошло
         if (date == Today)
             free = free.Where(t => t > TimeOnly.FromDateTime(DateTime.Now));
 
@@ -73,13 +81,17 @@ public class SlotsController : ControllerBase
         if (office == null)
             return BadRequest("Корпус не найден");
 
+        // НОВОЕ: цель должна существовать и быть доступной студенту
+        var purpose = _db.Purposes.Find(r.PurposeId);
+        if (purpose == null || purpose.AdminOnly)
+            return BadRequest("Выберите цель визита");
+
         if (r.Date < Today)
             return BadRequest("Нельзя записаться на прошедший день");
 
         if (!GetSlots(office).Contains(r.Time))
             return BadRequest("Такого времени нет");
 
-        // одна активная запись на студента (сегодня или позже)
         var my = _db.Bookings.FirstOrDefault(b => b.StudentId == CurrentUserId && b.Date >= Today);
         if (my != null)
             return BadRequest($"Вы уже записаны на {my.Date:dd.MM} в {my.Time:HH:mm}");
@@ -93,12 +105,13 @@ public class SlotsController : ControllerBase
             OfficeId = r.OfficeId,
             Date = r.Date,
             Time = r.Time,
+            PurposeId = r.PurposeId,   // НОВОЕ
             StudentId = user.Id,
             StudentName = user.FullName,
             Group = user.Group
         });
         _db.SaveChanges();
-        return Ok($"Вы записаны: {office.Name}, {r.Date:dd.MM} в {r.Time:HH:mm}");
+        return Ok($"Вы записаны: {office.Name}, {r.Date:dd.MM} в {r.Time:HH:mm} ({purpose.Name})");
     }
 
     // СТУДЕНТ: моя запись
@@ -111,7 +124,7 @@ public class SlotsController : ControllerBase
             return Ok("У вас нет записи");
 
         var office = _db.Offices.Find(my.OfficeId);
-        return Ok($"Вы записаны: {office?.Name}, {my.Date:dd.MM} в {my.Time:HH:mm}");
+        return Ok($"Вы записаны: {office?.Name}, {my.Date:dd.MM} в {my.Time:HH:mm} ({PurposeName(my.PurposeId)})");
     }
 
     // СТУДЕНТ: отменить свою запись
@@ -128,16 +141,25 @@ public class SlotsController : ControllerBase
         return Ok($"Запись на {my.Date:dd.MM} в {my.Time:HH:mm} отменена");
     }
 
-    // АДМИН: записи СВОЕГО корпуса на день
-    // пример: GET api/slots/bookings?date=2026-10-13
+    // АДМИН: записи СВОЕГО корпуса на день (НОВОЕ: + название цели)
     [Authorize(Roles = "Admin")]
     [HttpGet("slots/bookings")]
     public IActionResult GetBookings(DateOnly date)
     {
-        return Ok(_db.Bookings
+        var list = _db.Bookings
             .Where(b => b.OfficeId == CurrentOfficeId && b.Date == date)
             .OrderBy(b => b.Time)
-            .ToList());
+            .ToList();
+
+        // собираем для каждой записи "запись + название цели"
+        return Ok(list.Select(b => new
+        {
+            b.Id,
+            b.Time,
+            b.StudentName,
+            b.Group,
+            Purpose = PurposeName(b.PurposeId)
+        }));
     }
 
     // АДМИН: удалить запись своего корпуса

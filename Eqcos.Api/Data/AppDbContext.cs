@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     public DbSet<Booking> Bookings { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<Office> Offices { get; set; }
+    public DbSet<Purpose> Purposes { get; set; }
 
     // начальные данные: три корпуса сразу попадут в базу при миграции
     protected override void OnModelCreating(ModelBuilder mb)
@@ -18,6 +19,13 @@ public class AppDbContext : DbContext
             new Office { Id = 1, Name = "Главный корпус", Open = new TimeOnly(8, 0), Close = new TimeOnly(16, 30), BreakStart = new TimeOnly(11, 0), BreakEnd = new TimeOnly(13, 0) },
             new Office { Id = 2, Name = "Лабораторный корпус", Open = new TimeOnly(8, 0), Close = new TimeOnly(16, 30), BreakStart = new TimeOnly(11, 0), BreakEnd = new TimeOnly(13, 0) },
             new Office { Id = 3, Name = "Второй корпус", Open = new TimeOnly(8, 0), Close = new TimeOnly(16, 30), BreakStart = new TimeOnly(11, 0), BreakEnd = new TimeOnly(13, 0) }
+        );
+        // начальные цели визита
+        mb.Entity<Purpose>().HasData(
+            new Purpose { Id = 1, Name = "Подпись заявления на уход с пар", Minutes = 5 },
+            new Purpose { Id = 2, Name = "Направление на исправление оценки", Minutes = 5 },
+            new Purpose { Id = 3, Name = "Форма №6", Minutes = 5 },
+            new Purpose { Id = 4, Name = "Профилактическая беседа (вызов)", Minutes = 30, AdminOnly = true }
         );
     }
 }

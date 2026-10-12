@@ -40,6 +40,9 @@ namespace Eqcos.Api.Migrations
                     b.Property<int>("OfficeId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("PurposeId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("StudentId")
                         .HasColumnType("integer");
 
@@ -110,6 +113,59 @@ namespace Eqcos.Api.Migrations
                             Close = new TimeOnly(16, 30, 0),
                             Name = "Второй корпус",
                             Open = new TimeOnly(8, 0, 0)
+                        });
+                });
+
+            modelBuilder.Entity("Eqcos.Api.Models.Purpose", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AdminOnly")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Minutes")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Purposes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            AdminOnly = false,
+                            Minutes = 5,
+                            Name = "Подпись заявления на уход с пар"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            AdminOnly = false,
+                            Minutes = 5,
+                            Name = "Направление на исправление оценки"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            AdminOnly = false,
+                            Minutes = 5,
+                            Name = "Форма №6"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            AdminOnly = true,
+                            Minutes = 30,
+                            Name = "Профилактическая беседа (вызов)"
                         });
                 });
 

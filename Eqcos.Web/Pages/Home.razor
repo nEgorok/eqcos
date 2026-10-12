@@ -45,6 +45,20 @@
            @onchange="DateChanged" />
 </div>
 
+@* ---- Цель визита ---- *@
+@if (purposes != null)
+{
+    <div class="mb-3" style="max-width:420px">
+        <select class="form-select" @bind="purposeId">
+            <option value="0">— выберите цель визита —</option>
+            @foreach (var p in purposes)
+            {
+                <option value="@p.Id">@p.Name</option>
+            }
+        </select>
+    </div>
+}
+
 <h2>Свободное время</h2>
 
 @if (slots == null)
@@ -73,7 +87,10 @@ else
 @code {
     // такой же корпус, как Office на сервере (берём только нужное)
     private record OfficeDto(int Id, string Name);
+    private record PurposeDto(int Id, string Name, int Minutes);
 
+    private List<PurposeDto>? purposes;
+    private int purposeId = 0;   // 0 = цель ещё не выбрана
     private List<OfficeDto>? offices;
     private int officeId = 1;                                        // выбранный корпус
     private static DateOnly today = DateOnly.FromDateTime(DateTime.Now);
@@ -87,6 +104,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         offices = await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices");
+        purposes = await Http.GetFromJsonAsync<List<PurposeDto>>("api/purposes");
         await LoadAll();
     }
 
@@ -123,7 +141,7 @@ else
         }
     }
 
-    // клик по времени
+       // клик по времени
     private async Task Book(string time)
     {
         if (!Auth.IsLoggedIn)
@@ -132,11 +150,18 @@ else
             return;
         }
 
+        if (purposeId == 0)
+        {
+            message = "Сначала выберите цель визита";
+            return;
+        }
+
         var resp = await Http.PostAsJsonAsync("api/slots/book", new
         {
             officeId,
             date = date.ToString("yyyy-MM-dd"),
-            time = time + ":00"
+            time = time + ":00",
+            purposeId
         });
         message = await resp.Content.ReadAsStringAsync();
         await LoadAll();
