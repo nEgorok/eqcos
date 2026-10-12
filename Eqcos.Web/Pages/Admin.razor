@@ -2,57 +2,68 @@
 @inject HttpClient Http
 @inject AuthService Auth
 
-<PageTitle>Все записи</PageTitle>
-<h1>Все записи</h1>
+<PageTitle>Записи</PageTitle>
+<h1>Записи моего корпуса</h1>
 
 @if (Auth.Role != "Admin")
 {
     <p>Нет доступа. Войдите как администратор.</p>
 }
-else if (bookings == null)
-{
-    <p>Загрузка...</p>
-}
-else if (bookings.Count == 0)
-{
-    <p>Записей нет</p>
-}
 else
 {
+    <div class="mb-3" style="max-width:220px">
+        <input type="date" class="form-control"
+               value="@date.ToString("yyyy-MM-dd")"
+               @onchange="DateChanged" />
+    </div>
+
     @if (message != null)
     {
         <div class="alert alert-secondary">@message</div>
     }
 
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Время</th>
-                <th>ФИО</th>
-                <th>Группа</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var b in bookings)
-            {
+    @if (bookings == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (bookings.Count == 0)
+    {
+        <p>На этот день записей нет</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
                 <tr>
-                    <td>@b.Time.ToString("HH:mm")</td>
-                    <td>@b.StudentName</td>
-                    <td>@b.Group</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(b.Id)">Удалить</button>
-                    </td>
+                    <th>Время</th>
+                    <th>ФИО</th>
+                    <th>Группа</th>
+                    <th></th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var b in bookings)
+                {
+                    <tr>
+                        <td>@b.Time.ToString("HH:mm")</td>
+                        <td>@b.StudentName</td>
+                        <td>@b.Group</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(b.Id)">Удалить</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 }
 
 @code {
     // такая же запись, как Booking на сервере
-    private record BookingDto(int Id, TimeOnly Time, string StudentName, string Group, int StudentId);
+    private record BookingDto(int Id, int OfficeId, DateOnly Date, TimeOnly Time,
+                              string StudentName, string Group, int StudentId);
 
+    private DateOnly date = DateOnly.FromDateTime(DateTime.Now);   // выбранный день
     private List<BookingDto>? bookings;
     private string? message;
 
@@ -64,7 +75,18 @@ else
 
     private async Task Load()
     {
-        bookings = await Http.GetFromJsonAsync<List<BookingDto>>("api/slots/bookings");
+        bookings = await Http.GetFromJsonAsync<List<BookingDto>>(
+            $"api/slots/bookings?date={date:yyyy-MM-dd}");
+    }
+
+    private async Task DateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            date = d;
+            message = null;
+            await Load();
+        }
     }
 
     private async Task Delete(int id)

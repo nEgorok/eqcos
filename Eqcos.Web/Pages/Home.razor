@@ -21,7 +21,31 @@
     <div class="alert alert-secondary">@message</div>
 }
 
-<h1>Свободное время</h1>
+@* ---- Вкладки корпусов ---- *@
+@if (offices != null)
+{
+    <ul class="nav nav-tabs mb-3">
+        @foreach (var o in offices)
+        {
+            <li class="nav-item">
+                <button class="nav-link @(o.Id == officeId ? "active" : "")"
+                        @onclick="() => SelectOffice(o.Id)">
+                    @o.Name
+                </button>
+            </li>
+        }
+    </ul>
+}
+
+@* ---- Выбор дня ---- *@
+<div class="mb-3" style="max-width:220px">
+    <input type="date" class="form-control"
+           value="@date.ToString("yyyy-MM-dd")"
+           min="@today.ToString("yyyy-MM-dd")"
+           @onchange="DateChanged" />
+</div>
+
+<h2>Свободное время</h2>
 
 @if (slots == null)
 {
@@ -33,34 +57,69 @@ else if (slots.Count == 0)
 }
 else
 {
-    <div>
-        @foreach (var s in slots)
-        {
-            <button class="btn btn-outline-primary m-1" @onclick="() => Book(s)">@s</button>
-        }
-    </div>
+    @* группируем по часу: "08:05" -> "08" *@
+    @foreach (var hour in slots.GroupBy(s => s.Substring(0, 2)))
+    {
+        <div class="mb-2">
+            <strong class="me-2">@(hour.Key):00</strong>
+            @foreach (var s in hour)
+            {
+                <button class="btn btn-sm btn-outline-primary m-1" @onclick="() => Book(s)">@s</button>
+            }
+        </div>
+    }
 }
 
 @code {
+    // такой же корпус, как Office на сервере (берём только нужное)
+    private record OfficeDto(int Id, string Name);
+
+    private List<OfficeDto>? offices;
+    private int officeId = 1;                                        // выбранный корпус
+    private static DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+    private DateOnly date = today;                                   // выбранный день
+
     private List<string>? slots;     // свободное время
-    private string? myBooking;       // текст "Вы записаны на ..." / "У вас нет записи"
-    private bool hasBooking;         // есть ли запись (чтобы показать кнопку отмены)
+    private string? myBooking;       // "Вы записаны: ..." / "У вас нет записи"
+    private bool hasBooking;         // показывать ли кнопку отмены
     private string? message;         // ответ сервера после действия
 
     protected override async Task OnInitializedAsync()
     {
+        offices = await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices");
         await LoadAll();
     }
 
-    // загрузить свободное время и (если студент) свою запись
+    // загрузить свободное время выбранного корпуса и дня + свою запись
     private async Task LoadAll()
     {
-        slots = await Http.GetFromJsonAsync<List<string>>("api/slots/free");
+        slots = null;   // пока грузится — "Загрузка..."
+        slots = await Http.GetFromJsonAsync<List<string>>(
+            $"api/slots/free?officeId={officeId}&date={date:yyyy-MM-dd}");
 
         if (Auth.IsLoggedIn && Auth.Role == "Student")
         {
             myBooking = await Http.GetStringAsync("api/slots/my");
             hasBooking = myBooking.StartsWith("Вы записаны");
+        }
+    }
+
+    // клик по вкладке корпуса
+    private async Task SelectOffice(int id)
+    {
+        officeId = id;
+        message = null;
+        await LoadAll();
+    }
+
+    // выбрали другой день в календаре
+    private async Task DateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            date = d;
+            message = null;
+            await LoadAll();
         }
     }
 
@@ -73,10 +132,14 @@ else
             return;
         }
 
-        // сервер ждёт время в виде "10:15:00"
-        var resp = await Http.PostAsJsonAsync("api/slots/book", new { time = time + ":00" });
+        var resp = await Http.PostAsJsonAsync("api/slots/book", new
+        {
+            officeId,
+            date = date.ToString("yyyy-MM-dd"),
+            time = time + ":00"
+        });
         message = await resp.Content.ReadAsStringAsync();
-        await LoadAll();   // обновить кнопки и "мою запись"
+        await LoadAll();
     }
 
     // отмена своей записи

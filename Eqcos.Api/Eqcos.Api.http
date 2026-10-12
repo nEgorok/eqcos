@@ -1,4 +1,4 @@
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjIiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiYWRtaW4iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBZG1pbiIsImV4cCI6MTc5MTc0MjcyNn0.F9F3iE176W8DIZj7bWtAvBiJEyGFBYLwsHiKEQoikpo
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjUiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiYWRtaW5fbGFiIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJvZmZpY2UiOiIyIiwiZXhwIjoxNzkxODUzMDM3fQ.DU5jwj0GDUw5cBP434aZCzySWn5TptaOMnEDyaxUT_M
 
 ### Свободные слоты
 GET https://localhost:7227/api/slots/free
@@ -18,8 +18,8 @@ POST https://localhost:7227/api/auth/login
 Content-Type: application/json
 
 {
-  "login": "admin",
-  "password": "admin123"
+  "login": "admin_lab",
+  "password": "admin123lab"
 }
 ### Записаться (студент)
 POST https://localhost:7227/api/slots/book
