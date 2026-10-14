@@ -36,7 +36,7 @@ public class ProfileController : ControllerBase
 
         var office = u.OfficeId == null ? null : _db.Offices.Find(u.OfficeId)?.Name;
 
-        return Ok(new { u.Login, u.FullName, u.Group, u.Role, Office = office });
+        return Ok(new { u.Login, u.FullName, u.Group, u.Role, Office = office, u.Status, u.RejectReason });
     }
 
     // СТУДЕНТ: изменить ФИО и группу
@@ -50,6 +50,15 @@ public class ProfileController : ControllerBase
             return BadRequest("ФИО и группа не могут быть пустыми");
 
         var u = _db.Users.Find(CurrentUserId)!;
+
+        // данные поменялись — снова на проверку
+        var changed = u.FullName != fullName || u.Group != group;
+        if (changed)
+        {
+            u.Status = "Pending";
+            u.RejectReason = null;
+        }
+
         u.FullName = fullName;
         u.Group = group;
 
@@ -61,7 +70,7 @@ public class ProfileController : ControllerBase
         }
 
         _db.SaveChanges();
-        return Ok("Данные сохранены");
+        return Ok(changed ? "Данные сохранены и отправлены на проверку в учебную часть" : "Данные сохранены");
     }
 
     // СТУДЕНТ: удалить аккаунт (нужен пароль)

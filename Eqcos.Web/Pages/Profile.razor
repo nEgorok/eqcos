@@ -35,6 +35,11 @@ else
             else
             {
                 <p class="mb-2"><b>Номер студенческого:</b> @profile.Login</p>
+                <p class="mb-2"><b>Статус:</b> @StatusText(profile.Status)</p>
+                @if (profile.Status == "Rejected")
+                {
+                    <div class="alert alert-danger py-2">Причина: @profile.RejectReason</div>
+                }
                 <label class="form-label mb-0">ФИО</label>
                 <input class="form-control mb-2" @bind="editName" />
                 <label class="form-label mb-0">Группа</label>
@@ -98,7 +103,16 @@ else
 }
 
 @code {
-    private record ProfileDto(string Login, string FullName, string Group, string Role, string? Office);
+    private record ProfileDto(string Login, string FullName, string Group, string Role, string? Office,
+                              string Status, string? RejectReason);
+
+    // статус по-русски
+    private static string StatusText(string s) => s switch
+    {
+        "Approved" => "подтверждена",
+        "Rejected" => "отклонена",
+        _ => "на проверке"
+    };
     private record MyBookingDto(int Id, string Text, bool CanCancel);
 
     private ProfileDto? profile;

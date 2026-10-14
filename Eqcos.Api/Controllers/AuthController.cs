@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using Eqcos.Api.Data;
 using Eqcos.Api.Models;
 using Microsoft.AspNetCore.Authorization;
+using Eqcos.Api.Services;
 
 namespace Eqcos.Api.Controllers;
 
@@ -22,10 +23,13 @@ public class AuthController : ControllerBase
     private readonly IConfiguration _config;
     private readonly PasswordHasher<User> _hasher = new();
 
-    public AuthController(AppDbContext db, IConfiguration config)
+    private readonly IStudentVerifier _verifier;
+
+    public AuthController(AppDbContext db, IConfiguration config, IStudentVerifier verifier)
     {
         _db = db;
         _config = config;
+        _verifier = verifier;   // сервер сам подставит ManualVerifier (см. Program.cs)
     }
 
     // регистрация студента
@@ -44,9 +48,13 @@ public class AuthController : ControllerBase
         };
         user.PasswordHash = _hasher.HashPassword(user, r.Password); // пароль -> отпечаток
 
+        user.Status = _verifier.Check(user);   // сразу подтвердить или ждать админа
+
         _db.Users.Add(user);
         _db.SaveChanges();
-        return Ok("Регистрация прошла успешно");
+        return Ok(user.Status == "Approved"
+            ? "Регистрация прошла успешно"
+            : "Регистрация прошла успешно. Учебная часть проверит ваши данные, после этого можно будет записаться.");
     }
 
     // вход: проверяем пароль и выдаём пропуск

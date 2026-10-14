@@ -22,6 +22,19 @@
             </div>
         </div>
     }
+}@* ---- Статус учётной записи ---- *@
+@if (me != null && me.Status == "Pending")
+{
+    <div class="alert alert-warning">
+        Ваша учётная запись на проверке в учебной части. Записаться можно будет после подтверждения.
+    </div>
+}
+@if (me != null && me.Status == "Rejected")
+{
+    <div class="alert alert-danger">
+        Учётная запись не подтверждена: @me.RejectReason.
+        Исправьте данные в <a href="profile">профиле</a>, и они снова уйдут на проверку.
+    </div>
 }
 @* ---- Мои записи (студент) ---- *@
 @if (Auth.IsLoggedIn && Auth.Role == "Student" && myBookings != null)
@@ -114,6 +127,8 @@ else
     private record PurposeDto(int Id, string Name, int Minutes);
     private record MyBookingDto(int Id, string Text, bool CanCancel);
     private record NotificationDto(int Id, string Text, bool CanChange);
+    private record StatusDto(string Status, string? RejectReason);
+    private StatusDto? me;   // статус моей учётной записи
 
     private List<OfficeDto>? offices;
     private List<PurposeDto>? purposes;
@@ -159,6 +174,7 @@ else
         {
             myBookings = await Http.GetFromJsonAsync<List<MyBookingDto>>("api/slots/my");
             notifications = await Http.GetFromJsonAsync<List<NotificationDto>>("api/notifications");
+            me = await Http.GetFromJsonAsync<StatusDto>("api/profile");
         }
     }
 

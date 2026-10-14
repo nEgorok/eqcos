@@ -9,5 +9,7 @@ public class User
     public string FullName { get; set; } = "";
     public string Group { get; set; } = "";
     public int? OfficeId { get; set; }  // только у админа: какой корпус он ведёт (у студента пусто)
+    public string Status { get; set; } = "Pending";   // "Pending" — на проверке, "Approved" — подтверждён, "Rejected" — отклонён
+    public string? RejectReason { get; set; }         // почему отклонили (видит студент)
 
 }

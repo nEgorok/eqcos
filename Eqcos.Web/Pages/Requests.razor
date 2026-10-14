@@ -1,0 +1,93 @@
+﻿@page "/requests"
+@inject HttpClient Http
+@inject AuthService Auth
+
+<PageTitle>Заявки</PageTitle>
+<h1>Заявки на подтверждение</h1>
+
+@if (Auth.Role != "Admin")
+{
+    <p>Нет доступа. Войдите как администратор.</p>
+}
+else if (list == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="Load">Обновить</button>
+
+    @if (message != null)
+    {
+        <div class="alert alert-secondary">@message</div>
+    }
+
+    @if (list.Count == 0)
+    {
+        <p>Новых заявок нет</p>
+    }
+    else
+    {
+        <table class="table align-middle">
+            <thead>
+                <tr><th>Студенческий</th><th>ФИО</th><th>Группа</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var s in list)
+                {
+                    <tr>
+                        <td>@s.Login</td>
+                        <td>@s.FullName</td>
+                        <td>@s.Group</td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-success" @onclick="() => Approve(s.Id)">Подтвердить</button>
+                                <input class="form-control form-control-sm" style="max-width:220px"
+                                       placeholder="Причина отказа" @bind="reasons[s.Id]" />
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Reject(s.Id)">Отклонить</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private record RequestDto(int Id, string Login, string FullName, string Group);
+
+    private List<RequestDto>? list;
+    private Dictionary<int, string> reasons = new();   // Id студента -> введённая причина
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.Role == "Admin")
+            await Load();
+    }
+
+    private async Task Load()
+    {
+        list = await Http.GetFromJsonAsync<List<RequestDto>>("api/requests");
+
+        // у каждой строки своё поле "Причина"
+        foreach (var s in list!)
+            if (!reasons.ContainsKey(s.Id))
+                reasons[s.Id] = "";
+    }
+
+    private async Task Approve(int id)
+    {
+        var resp = await Http.PostAsync($"api/requests/{id}/approve", null);
+        message = await resp.Content.ReadAsStringAsync();
+        await Load();
+    }
+
+    private async Task Reject(int id)
+    {
+        var resp = await Http.PostAsJsonAsync($"api/requests/{id}/reject", new { reason = reasons[id] });
+        message = await resp.Content.ReadAsStringAsync();
+        await Load();
+    }
+}

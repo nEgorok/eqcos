@@ -28,6 +28,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+// кто проверяет новых студентов (сейчас вручную админом)
+builder.Services.AddScoped<Eqcos.Api.Services.IStudentVerifier, Eqcos.Api.Services.ManualVerifier>();
 // разрешаем сайту обращаться к API
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
