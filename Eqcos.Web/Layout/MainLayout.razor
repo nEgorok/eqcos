@@ -9,7 +9,7 @@
         <div class="top-row px-4">
             @if (Auth.IsLoggedIn)
             {
-                <span class="me-3">@Auth.FullName (@Auth.Role)</span>
+                <NavLink class="me-3" href="profile" title="Профиль">@Auth.FullName (@Auth.Role)</NavLink>
                 <button class="btn btn-link" @onclick="() => Auth.Logout()">Выйти</button>
             }
             else

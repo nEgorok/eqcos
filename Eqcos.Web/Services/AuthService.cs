@@ -61,6 +61,13 @@ public class AuthService
         return null;
     }
 
+    // после изменения ФИО в профиле — обновить имя справа сверху
+    public async Task SetFullName(string name)
+    {
+        FullName = name;
+        await _js.InvokeVoidAsync("sessionStorage.setItem", "fullName", name);
+        Changed?.Invoke();
+    }
     public async Task Logout()
     {
         Token = Role = FullName = null;

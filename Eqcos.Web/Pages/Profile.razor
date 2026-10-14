@@ -1,0 +1,184 @@
+﻿@page "/profile"
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Профиль</PageTitle>
+<h1>Профиль</h1>
+
+@if (!Auth.IsLoggedIn)
+{
+    <p>Сначала войдите.</p>
+}
+else if (profile == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    @if (message != null)
+    {
+        <div class="alert @(ok ? "alert-success" : "alert-danger")">@message</div>
+    }
+
+    @* ---- Данные ---- *@
+    <div class="card mb-3" style="max-width:520px">
+        <div class="card-body">
+            <h5 class="card-title">Мои данные</h5>
+
+            @if (profile.Role == "Admin")
+            {
+                <p class="mb-1"><b>Учётная запись:</b> @profile.Login</p>
+                <p class="mb-1"><b>Название:</b> @profile.FullName</p>
+                <p class="mb-0"><b>Корпус:</b> @profile.Office</p>
+            }
+            else
+            {
+                <p class="mb-2"><b>Номер студенческого:</b> @profile.Login</p>
+                <label class="form-label mb-0">ФИО</label>
+                <input class="form-control mb-2" @bind="editName" />
+                <label class="form-label mb-0">Группа</label>
+                <input class="form-control mb-2" @bind="editGroup" />
+                <button class="btn btn-primary" @onclick="SaveData">Сохранить</button>
+            }
+        </div>
+    </div>
+
+    @* ---- Мои записи (студент) ---- *@
+    @if (profile.Role == "Student" && myBookings != null)
+    {
+        <div class="card mb-3" style="max-width:520px">
+            <div class="card-body">
+                <h5 class="card-title">Мои записи</h5>
+                @if (myBookings.Count == 0)
+                {
+                    <p class="mb-0">Записей нет</p>
+                }
+                @foreach (var b in myBookings)
+                {
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                        <span>@(b.CanCancel ? "" : "Вызов: ")@b.Text</span>
+                        @if (b.CanCancel)
+                        {
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelBooking(b.Id)">Отменить</button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* ---- Смена пароля ---- *@
+    <div class="card mb-3" style="max-width:520px">
+        <div class="card-body">
+            <h5 class="card-title">Сменить пароль</h5>
+            <input class="form-control mb-2" type="password" placeholder="Старый пароль" @bind="oldPassword" />
+            <input class="form-control mb-2" type="password" placeholder="Новый пароль" @bind="newPassword" />
+            <input class="form-control mb-2" type="password" placeholder="Повторите новый пароль" @bind="repeat" />
+            <button class="btn btn-primary" @onclick="ChangePassword">Сменить пароль</button>
+        </div>
+    </div>
+
+    @* ---- Удалить аккаунт (студент) ---- *@
+    @if (profile.Role == "Student")
+    {
+        <div class="card mb-3 border-danger" style="max-width:520px">
+            <div class="card-body">
+                <h5 class="card-title text-danger">Удалить аккаунт</h5>
+                <p class="small text-muted mb-2">Будущие записи будут отменены. Восстановить аккаунт нельзя — только зарегистрироваться заново.</p>
+                <input class="form-control mb-2" type="password" placeholder="Пароль для подтверждения" @bind="deletePassword" />
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="sure" @bind="sure" />
+                    <label class="form-check-label" for="sure">Я понимаю, что аккаунт удалится навсегда</label>
+                </div>
+                <button class="btn btn-danger" disabled="@(!sure)" @onclick="DeleteAccount">Удалить аккаунт</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private record ProfileDto(string Login, string FullName, string Group, string Role, string? Office);
+    private record MyBookingDto(int Id, string Text, bool CanCancel);
+
+    private ProfileDto? profile;
+    private List<MyBookingDto>? myBookings;
+
+    private string editName = "";
+    private string editGroup = "";
+
+    private string oldPassword = "";
+    private string newPassword = "";
+    private string repeat = "";
+
+    private string deletePassword = "";
+    private bool sure;   // галочка "я понимаю"
+
+    private string? message;
+    private bool ok;     // зелёная или красная плашка
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsLoggedIn)
+            await Load();
+    }
+
+    private async Task Load()
+    {
+        profile = await Http.GetFromJsonAsync<ProfileDto>("api/profile");
+        editName = profile!.FullName;
+        editGroup = profile.Group;
+
+        if (profile.Role == "Student")
+            myBookings = await Http.GetFromJsonAsync<List<MyBookingDto>>("api/slots/my");
+    }
+
+    // показать ответ сервера зелёным или красным
+    private async Task Show(HttpResponseMessage resp)
+    {
+        ok = resp.IsSuccessStatusCode;
+        message = await resp.Content.ReadAsStringAsync();
+    }
+
+    private async Task SaveData()
+    {
+        var resp = await Http.PutAsJsonAsync("api/profile", new { fullName = editName, group = editGroup });
+        await Show(resp);
+        if (ok)
+        {
+            await Auth.SetFullName(editName.Trim());   // обновить имя справа сверху
+            await Load();
+        }
+    }
+
+    private async Task CancelBooking(int id)
+    {
+        await Show(await Http.DeleteAsync($"api/slots/my/{id}"));
+        await Load();
+    }
+
+    private async Task ChangePassword()
+    {
+        if (newPassword != repeat)
+        {
+            ok = false;
+            message = "Новые пароли не совпадают";
+            return;
+        }
+
+        await Show(await Http.PostAsJsonAsync("api/auth/password", new { oldPassword, newPassword }));
+        if (ok)
+            oldPassword = newPassword = repeat = "";
+    }
+
+    private async Task DeleteAccount()
+    {
+        var resp = await Http.PostAsJsonAsync("api/profile/delete", new { password = deletePassword });
+        await Show(resp);
+        if (ok)
+        {
+            await Auth.Logout();
+            Nav.NavigateTo("/");
+        }
+    }
+}
