@@ -1,6 +1,7 @@
 ﻿@page "/admin"
 @inject HttpClient Http
 @inject AuthService Auth
+@implements IDisposable
 
 <PageTitle>Записи</PageTitle>
 <h1>Записи моего корпуса</h1>
@@ -116,15 +117,31 @@ else
     private string summonLogin = "";
     private TimeOnly summonTime = new TimeOnly(14, 0);
 
-    private TimeOnly closeStart = new TimeOnly(10, 0);   // закрыть с
-    private TimeOnly closeEnd = new TimeOnly(11, 0);     // закрыть по
+    private TimeOnly closeStart = new TimeOnly(10, 0);
+    private TimeOnly closeEnd = new TimeOnly(11, 0);
     private string closeReason = "Совещание";
+
+    private System.Threading.Timer? timer;
 
     protected override async Task OnInitializedAsync()
     {
         if (Auth.Role == "Admin")
+        {
             await Load();
+            // раз в 5 секунд тихо обновлять
+            timer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await Load();
+                    StateHasChanged();
+                });
+            }, null, 5000, 5000);
+        }
     }
+
+    // ушли со страницы — остановить таймер
+    public void Dispose() => timer?.Dispose();
 
     private async Task Load()
     {
@@ -162,7 +179,6 @@ else
         await Load();
     }
 
-    // закрыть время
     private async Task CloseTime()
     {
         var resp = await Http.PostAsJsonAsync("api/closures", new
@@ -176,7 +192,6 @@ else
         await Load();
     }
 
-    // открыть время обратно
     private async Task OpenTime(int id)
     {
         var resp = await Http.DeleteAsync($"api/closures/{id}");

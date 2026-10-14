@@ -12,7 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<Office> Offices { get; set; }
     public DbSet<Purpose> Purposes { get; set; }
     public DbSet<Closure> Closures { get; set; }
-
+    public DbSet<Notification> Notifications { get; set; }
     // начальные данные: три корпуса сразу попадут в базу при миграции
     protected override void OnModelCreating(ModelBuilder mb)
     {

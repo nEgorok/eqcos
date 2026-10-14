@@ -2,9 +2,27 @@
 @inject HttpClient Http
 @inject AuthService Auth
 @inject NavigationManager Nav
+@implements IDisposable
 
 <PageTitle>Запись в учебную часть</PageTitle>
 
+@* ---- Уведомления ---- *@
+@if (notifications != null)
+{
+    @foreach (var n in notifications)
+    {
+        <div class="alert alert-primary">
+            @n.Text
+            <div class="mt-2">
+                <button class="btn btn-sm btn-primary" @onclick="() => NotifyOk(n.Id)">Ок</button>
+                @if (n.CanChange)
+                {
+                    <button class="btn btn-sm btn-outline-primary ms-2" @onclick="() => NotifyOther(n.Id)">Выбрать другое время</button>
+                }
+            </div>
+        </div>
+    }
+}
 @* ---- Мои записи (студент) ---- *@
 @if (Auth.IsLoggedIn && Auth.Role == "Student" && myBookings != null)
 {
@@ -94,7 +112,8 @@ else
 @code {
     private record OfficeDto(int Id, string Name);
     private record PurposeDto(int Id, string Name, int Minutes);
-    private record MyBookingDto(int Id, string Text, bool CanCancel);   // как MyBooking на сервере
+    private record MyBookingDto(int Id, string Text, bool CanCancel);
+    private record NotificationDto(int Id, string Text, bool CanChange);
 
     private List<OfficeDto>? offices;
     private List<PurposeDto>? purposes;
@@ -104,24 +123,43 @@ else
     private DateOnly date = today;
 
     private List<string>? slots;
-    private List<MyBookingDto>? myBookings;   // своя запись + вызовы
+    private List<MyBookingDto>? myBookings;
+    private List<NotificationDto>? notifications;
     private string? message;
+
+    private System.Threading.Timer? timer;
 
     protected override async Task OnInitializedAsync()
     {
         offices = await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices");
         purposes = await Http.GetFromJsonAsync<List<PurposeDto>>("api/purposes");
         await LoadAll();
+
+        // раз в 5 секунд тихо обновлять
+        timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadAll(quiet: true);
+                StateHasChanged();
+            });
+        }, null, 5000, 5000);
     }
 
-    private async Task LoadAll()
+    // ушли со страницы — остановить таймер
+    public void Dispose() => timer?.Dispose();
+
+    private async Task LoadAll(bool quiet = false)
     {
-        slots = null;
+        if (!quiet) slots = null;   // при тихом обновлении не мигаем "Загрузка..."
         slots = await Http.GetFromJsonAsync<List<string>>(
             $"api/slots/free?officeId={officeId}&date={date:yyyy-MM-dd}");
 
         if (Auth.IsLoggedIn && Auth.Role == "Student")
+        {
             myBookings = await Http.GetFromJsonAsync<List<MyBookingDto>>("api/slots/my");
+            notifications = await Http.GetFromJsonAsync<List<NotificationDto>>("api/notifications");
+        }
     }
 
     private async Task SelectOffice(int id)
@@ -166,10 +204,24 @@ else
         await LoadAll();
     }
 
-    // отмена своей записи по её Id
     private async Task Cancel(int id)
     {
         var resp = await Http.DeleteAsync($"api/slots/my/{id}");
+        message = await resp.Content.ReadAsStringAsync();
+        await LoadAll();
+    }
+
+    // "Ок" — скрыть уведомление
+    private async Task NotifyOk(int id)
+    {
+        await Http.PostAsync($"api/notifications/{id}/ok", null);
+        await LoadAll();
+    }
+
+    // "Выбрать другое время" — отменить перенесённую запись
+    private async Task NotifyOther(int id)
+    {
+        var resp = await Http.PostAsync($"api/notifications/{id}/other", null);
         message = await resp.Content.ReadAsStringAsync();
         await LoadAll();
     }

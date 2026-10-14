@@ -10,7 +10,7 @@
             @if (Auth.IsLoggedIn)
             {
                 <span class="me-3">@Auth.FullName (@Auth.Role)</span>
-                <button class="btn btn-link" @onclick="Auth.Logout">Выйти</button>
+                <button class="btn btn-link" @onclick="() => Auth.Logout()">Выйти</button>
             }
             else
             {

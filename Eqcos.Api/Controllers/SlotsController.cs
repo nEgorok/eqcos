@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Eqcos.Api.Models;
 using Eqcos.Api.Data;
+using static Eqcos.Api.Services.Schedule;   // Step, GetSlots, Fits, Overlaps — общие с ClosuresController
 
 namespace Eqcos.Api.Controllers;
 
@@ -19,8 +20,6 @@ public record MyBooking(int Id, string Text, bool CanCancel);
 [Route("api")]
 public class SlotsController : ControllerBase
 {
-    private const int Step = 5;   // шаг сетки в минутах
-
     private readonly AppDbContext _db;
 
     public SlotsController(AppDbContext db)
@@ -242,54 +241,6 @@ public class SlotsController : ControllerBase
     private List<int> AdminOnlyIds() =>
         _db.Purposes.Where(p => p.AdminOnly).Select(p => p.Id).ToList();
 
-    // занятые отрезки (начало, конец) в корпусе на день
-    // занятые отрезки (начало, конец) в корпусе на день: записи + закрытое время
-    private List<(TimeOnly Start, TimeOnly End)> Busy(int officeId, DateOnly date)
-    {
-        var minutes = _db.Purposes.ToDictionary(p => p.Id, p => p.Minutes);
-
-        var bookings = _db.Bookings
-            .Where(b => b.OfficeId == officeId && b.Date == date)
-            .ToList()
-            .Select(b => (b.Time, b.Time.AddMinutes(minutes.GetValueOrDefault(b.PurposeId, Step))));
-
-        var closures = _db.Closures
-            .Where(c => c.OfficeId == officeId && c.Date == date)
-            .ToList()
-            .Select(c => (c.Start, c.End));
-
-        return bookings.Concat(closures).ToList();   // склеиваем два списка в один
-    }
-
-    // пересекается ли start..end хоть с одним занятым отрезком
-    private static bool Overlaps(List<(TimeOnly Start, TimeOnly End)> busy, TimeOnly start, TimeOnly end)
-    {
-        return busy.Any(x => start < x.End && x.Start < end);
-    }
-
-    // помещается ли приём длиной minutes целиком в рабочее время (без перерыва)
-    private static bool Fits(Office office, TimeOnly start, int minutes)
-    {
-        var slots = GetSlots(office);
-        for (var t = start; t < start.AddMinutes(minutes); t = t.AddMinutes(Step))
-        {
-            if (!slots.Contains(t))
-                return false;
-        }
-        return true;
-    }
-
-    // все клетки корпуса с шагом Step, без перерыва
-    private static List<TimeOnly> GetSlots(Office office)
-    {
-        var slots = new List<TimeOnly>();
-        var t = office.Open;
-        while (t < office.Close)
-        {
-            if (t < office.BreakStart || t >= office.BreakEnd)
-                slots.Add(t);
-            t = t.AddMinutes(Step);
-        }
-        return slots;
-    }
+    // занятые отрезки этого корпуса на день (сама логика — в Services/Schedule.cs)
+    private List<(TimeOnly Start, TimeOnly End)> Busy(int officeId, DateOnly date) => Eqcos.Api.Services.Schedule.Busy(_db, officeId, date);
 }
