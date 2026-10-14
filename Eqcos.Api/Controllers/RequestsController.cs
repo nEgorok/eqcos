@@ -43,7 +43,7 @@ public class RequestsController : ControllerBase
         u.RejectReason = null;
         Notify(u.Id, "Учебная часть подтвердила вашу учётную запись. Теперь можно записываться.");
         _db.SaveChanges();
-        return Ok($"{u.FullName} подтверждён");
+        return Ok($"Учётная запись подтверждена: {u.FullName}");
     }
 
     // отклонить с причиной
@@ -62,7 +62,7 @@ public class RequestsController : ControllerBase
         u.RejectReason = reason;
         Notify(u.Id, $"Учётная запись не подтверждена: {reason}. Исправьте данные в профиле.");
         _db.SaveChanges();
-        return Ok($"{u.FullName} отклонён");
+        return Ok($"Учётная запись отклонена: {u.FullName}");
     }
 
     private void Notify(int userId, string text)

@@ -13,7 +13,7 @@ namespace Eqcos.Api.Controllers;
 
 // что присылает студент при регистрации и входе
 public record RegisterRequest(string Login, string Password, string FullName, string Group);
-public record LoginRequest(string Login, string Password);
+public record LoginRequest(string Login, string Password, bool Staff = false);   // Staff = вход через окно сотрудников
 public record ChangePasswordRequest(string OldPassword, string NewPassword);
 [ApiController]
 [Route("api/auth")]
@@ -35,7 +35,9 @@ public class AuthController : ControllerBase
     // регистрация студента
     [HttpPost("register")]
     public IActionResult Register(RegisterRequest r)
-    {
+    {        // номер студенческого — только цифры (так студент не займёт логин вроде admin_kpk)
+        if (r.Login == "" || !r.Login.All(char.IsDigit))
+            return BadRequest("Номер студенческого должен состоять только из цифр");
         if (_db.Users.Any(u => u.Login == r.Login))
             return BadRequest("Такой номер студенческого уже зарегистрирован");
 
@@ -68,7 +70,10 @@ public class AuthController : ControllerBase
         var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, r.Password);
         if (result == PasswordVerificationResult.Failed)
             return Unauthorized("Неверный логин или пароль");
-
+        // студент — только через студенческое окно, админ — только через окно сотрудников
+        var isAdmin = user.Role == "Admin";
+        if (isAdmin != r.Staff)
+            return Unauthorized("Неверный логин или пароль");
         return Ok(new { token = CreateToken(user), role = user.Role, fullName = user.FullName });
     }
     // смена пароля: для любого вошедшего (студент или админ)

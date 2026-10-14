@@ -5,21 +5,14 @@ GET https://localhost:7227/api/slots/free
 ### Регистрация
 POST https://localhost:7227/api/auth/register
 Content-Type: application/json
-
-{
-    "login": "admin",
-  "password": "admin123",
-  "fullName": "Учебная часть",
-  "group": "-"
-}
-
 ### Вход
 POST https://localhost:7227/api/auth/login
 Content-Type: application/json
 
 {
   "login": "admin_lab",
-  "password": "admin123lab"
+  "password": "admin_lab_26",
+  "staff": true
 }
 ### Записаться (студент)
 POST https://localhost:7227/api/slots/book

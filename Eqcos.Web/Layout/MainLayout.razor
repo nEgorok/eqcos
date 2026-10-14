@@ -1,29 +1,66 @@
 ﻿@inject AuthService Auth
 @inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
 
-    <main>
-        <div class="top-row px-4">
+<header class="eq-header">
+    @* ---- Верхняя строка: меню ---- *@
+    <div class="eq-container eq-topline">
+        <nav class="eq-nav">
+            @if (Auth.Role != "Admin")
+            {
+                <NavLink href="" Match="NavLinkMatch.All">Запись</NavLink>
+            }
+            @if (Auth.Role == "Admin")
+            {
+                <NavLink href="admin">Все записи</NavLink>
+                <NavLink href="requests">Заявки</NavLink>
+            }
             @if (Auth.IsLoggedIn)
             {
-                <NavLink class="me-3" href="profile" title="Профиль">@Auth.FullName (@Auth.Role)</NavLink>
-                <button class="btn btn-link" @onclick="() => Auth.Logout()">Выйти</button>
+                <NavLink href="profile">Профиль</NavLink>
+            }
+        </nav>
+
+        @if (Auth.IsLoggedIn)
+        {
+            <NavLink class="eq-user" href="profile" title="Профиль">👤 @Auth.FullName</NavLink>
+        }
+    </div>
+
+    @* ---- Строка с логотипом и кнопками ---- *@
+    <div class="eq-container eq-brandline">
+        <a class="eq-brand" href="">
+            <img src="img/logo.png" alt="" />
+            <span>Камский государственный<br />автомеханический техникум<br />им. Л.Б. Васильева</span>
+        </a>
+
+        <div class="eq-service">Электронная очередь<br />учебной части</div>
+
+        <div class="eq-actions">
+            @if (Auth.IsLoggedIn)
+            {
+                <a class="btn eq-btn eq-btn-blue" href="profile">Профиль</a>
+                <button class="btn eq-btn eq-btn-green" @onclick="() => Auth.Logout()">Выйти</button>
             }
             else
             {
-                <NavLink href="login">Войти</NavLink>
+                <a class="btn eq-btn eq-btn-blue" href="login">Войти</a>
+                <a class="btn eq-btn eq-btn-green" href="register">Регистрация</a>
             }
         </div>
+    </div>
+</header>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<main class="eq-container eq-main">
+    @Body
+</main>
+
+<footer class="eq-footer">
+    <div class="eq-container">
+        ГАПОУ «Камский государственный автомеханический техникум им. Л.Б. Васильева» · Электронная очередь учебной части
+    </div>
+</footer>
+
 @code {
-    // при входе/выходе перерисовать верхнюю полосу
+    // при входе/выходе перерисовать шапку
     protected override void OnInitialized() => Auth.Changed += StateHasChanged;
 }

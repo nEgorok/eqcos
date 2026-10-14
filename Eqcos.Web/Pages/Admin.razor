@@ -52,10 +52,14 @@ else
         <div class="alert alert-secondary">@message</div>
     }
 
-    @* ---- Закрытое время на день ---- *@
-    @if (closures != null && closures.Count > 0)
+    @* ---- Закрытое время на день (видно всегда) ---- *@
+    <h5>Закрытое время</h5>
+    @if (closures == null || closures.Count == 0)
     {
-        <h5>Закрытое время</h5>
+        <p class="text-muted">Закрытого времени нет</p>
+    }
+    else
+    {
         <ul class="list-group mb-3" style="max-width:620px">
             @foreach (var c in closures)
             {
@@ -67,6 +71,7 @@ else
         </ul>
     }
 
+    <h5 class="mt-4">Записи на день</h5>
     @if (bookings == null)
     {
         <p>Загрузка...</p>
@@ -165,7 +170,7 @@ else
     {
         if (summonLogin == "")
         {
-            message = "Введите номер студенческого";
+            Say("Введите номер студенческого");
             return;
         }
 
@@ -175,7 +180,7 @@ else
             date = date.ToString("yyyy-MM-dd"),
             time = summonTime.ToString("HH:mm:ss")
         });
-        message = await resp.Content.ReadAsStringAsync();
+        Say(await resp.Content.ReadAsStringAsync());
         await Load();
     }
 
@@ -188,21 +193,38 @@ else
             end = closeEnd.ToString("HH:mm:ss"),
             reason = closeReason
         });
-        message = await resp.Content.ReadAsStringAsync();
+        Say(await resp.Content.ReadAsStringAsync());
         await Load();
     }
 
     private async Task OpenTime(int id)
     {
         var resp = await Http.DeleteAsync($"api/closures/{id}");
-        message = await resp.Content.ReadAsStringAsync();
+        Say(await resp.Content.ReadAsStringAsync());
         await Load();
     }
 
     private async Task Delete(int id)
     {
         var resp = await Http.DeleteAsync($"api/slots/bookings/{id}");
-        message = await resp.Content.ReadAsStringAsync();
+        Say(await resp.Content.ReadAsStringAsync());
         await Load();
+    }
+
+    // показать сообщение и убрать его через 5 секунд
+    private void Say(string text)
+    {
+        message = text;
+        _ = HideLater(text);   // "_ =" — запустить и не ждать
+    }
+
+    private async Task HideLater(string text)
+    {
+        await Task.Delay(5000);
+        if (message == text)   // если за это время не пришло новое сообщение
+        {
+            message = null;
+            StateHasChanged();
+        }
     }
 }

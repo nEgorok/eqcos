@@ -1,77 +1,170 @@
-.page {
-    position: relative;
+/* ===== Шапка как у техникума ===== */
+.eq-header {
+    background: var(--eq-head);
+    border-bottom: 1px solid var(--eq-line);
+}
+
+/* общая ширина содержимого, как у сайта техникума */
+::deep .eq-container, .eq-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+}
+
+/* верхняя строка: меню + ФИО */
+.eq-topline {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 0.8rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--eq-line);
+    flex-wrap: wrap;
 }
 
-main {
-    flex: 1;
+.eq-nav {
+    display: flex;
+    gap: 1.6rem;
+    flex-wrap: wrap;
 }
 
-.sidebar {
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    .eq-nav ::deep a {
+        color: var(--eq-ink);
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+        .eq-nav ::deep a:hover,
+        .eq-nav ::deep a.active {
+            color: var(--eq-blue);
+            text-decoration: underline;
+            text-underline-offset: 6px;
+        }
+
+::deep .eq-user {
+    color: var(--eq-ink);
+    text-decoration: none;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
 }
 
-.top-row {
-    background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5d5;
-    justify-content: flex-end;
-    height: 3.5rem;
+    ::deep .eq-user:hover {
+        color: var(--eq-blue);
+    }
+
+/* строка с логотипом */
+.eq-brandline {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-top: 1.2rem;
+    padding-bottom: 1.2rem;
 }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        white-space: nowrap;
-        margin-left: 1.5rem;
-        text-decoration: none;
+.eq-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    text-decoration: none;
+    color: var(--eq-ink);
+}
+
+    .eq-brand img {
+        height: 72px;
     }
 
-    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
-        text-decoration: underline;
+    .eq-brand span {
+        font-family: 'Unbounded', sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        line-height: 1.25;
     }
 
-    .top-row ::deep a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+/* надпись посередине, как "ПРОФЕССИОНАЛИТЕТ" */
+.eq-service {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.85rem;
+    text-align: center;
+    color: var(--eq-blue);
+}
 
-@media (max-width: 640.98px) {
-    .top-row {
-        justify-content: space-between;
-    }
+.eq-actions {
+    display: flex;
+    gap: 0.6rem;
+}
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        margin-left: 0;
+/* ===== Содержимое и подвал ===== */
+.eq-main {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+    min-height: 60vh;
+}
+
+.eq-footer {
+    border-top: 1px solid var(--eq-line);
+    background: var(--eq-head);
+    padding: 1.2rem 0;
+    font-size: 0.8rem;
+    color: #555;
+}
+
+/* ===== Телефон ===== */
+@media (max-width: 860px) {
+    .eq-service {
+        display: none;
     }
 }
 
-@media (min-width: 641px) {
-    .page {
-        flex-direction: row;
+@media (max-width: 640px) {
+    .eq-brandline {
+        flex-direction: column;
+        align-items: flex-start;
     }
 
-    .sidebar {
-        width: 250px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
+    .eq-brand img {
+        height: 56px;
     }
 
-    .top-row {
-        position: sticky;
-        top: 0;
-        z-index: 1;
+    .eq-brand span {
+        font-size: 0.7rem;
     }
 
-    .top-row.auth ::deep a:first-child {
-        flex: 1;
-        text-align: right;
-        width: 0;
+    .eq-nav {
+        gap: 1rem;
     }
+}
+/* ===== Спокойный вариант (перекрывает то, что выше) ===== */
+.eq-brand img {
+    height: 52px;
+}
 
-    .top-row, article {
-        padding-left: 2rem !important;
-        padding-right: 1.5rem !important;
-    }
+.eq-brand span {
+    font-family: 'Montserrat', sans-serif;
+    text-transform: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.eq-service {
+    font-family: 'Montserrat', sans-serif;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+::deep .eq-user {
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 0.9rem;
+    font-weight: 600;
 }

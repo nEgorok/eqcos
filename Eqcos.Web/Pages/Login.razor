@@ -1,30 +1,136 @@
 ﻿@page "/login"
+@page "/register"
+@page "/staff"
 @inject AuthService Auth
+@inject HttpClient Http
 @inject NavigationManager Nav
+@implements IDisposable
 
-<PageTitle>Вход</PageTitle>
-<h1>Вход</h1>
+<PageTitle>@(mode == "register" ? "Регистрация" : "Вход")</PageTitle>
 
-<div style="max-width:320px">
-    <input class="form-control mb-2" placeholder="Номер студенческого" @bind="login" />
-    <input class="form-control mb-2" type="password" placeholder="Пароль" @bind="password" />
-    <button class="btn btn-primary" @onclick="DoLogin">Войти</button>
+<div class="eq-auth">
+    <div class="card eq-auth-card">
+        <div class="card-body">
 
-    @if (error != null)
-    {
-        <div class="text-danger mt-2">@error</div>
-    }
+            @if (mode == "staff")
+            {
+                <h1 class="eq-auth-title">Вход для учебной части</h1>
+            }
+            else
+            {
+                @* ---- Вкладки Вход / Регистрация ---- *@
+                <div class="eq-auth-tabs">
+                    <button class="@(mode == "login" ? "active" : "")" @onclick='() => Switch("login")'>Вход</button>
+                    <button class="@(mode == "register" ? "active" : "")" @onclick='() => Switch("register")'>Регистрация</button>
+                </div>
+            }
+
+            @if (mode == "register")
+            {
+                <input class="form-control mb-2" placeholder="ФИО" @bind="fullName" />
+                <input class="form-control mb-2" placeholder="Группа" @bind="group" />
+                <input class="form-control mb-2" placeholder="Номер студенческого" @bind="login" />
+                <input class="form-control mb-3" type="password" placeholder="Пароль (не короче 6 символов)" @bind="password" />
+                <button class="btn btn-success w-100" @onclick="DoRegister">Зарегистрироваться</button>
+            }
+            else
+            {
+                <input class="form-control mb-2" placeholder="@(mode == "staff" ? "Логин" : "Номер студенческого")" @bind="login" />
+                <input class="form-control mb-3" type="password" placeholder="Пароль" @bind="password" />
+                <button class="btn btn-primary w-100" @onclick="DoLogin">Войти</button>
+            }
+
+            @if (error != null)
+            {
+                <div class="text-danger mt-2">@error</div>
+            }
+
+            @* ---- Микроссылка внизу ---- *@
+            <div class="eq-auth-foot">
+                @if (mode == "staff")
+                {
+                    <a href="login">Вход для студентов</a>
+                }
+                else
+                {
+                    <a href="staff">Вход для сотрудников</a>
+                }
+            </div>
+        </div>
+    </div>
 </div>
 
 @code {
     private string login = "";
     private string password = "";
+    private string fullName = "";
+    private string group = "";
     private string? error;
+
+    // какое окно показать: "login", "register" или "staff"
+    private string mode = "login";
+
+    protected override void OnInitialized()
+    {
+        ReadMode();
+        Nav.LocationChanged += OnLocationChanged;   // следить за сменой адреса
+    }
+
+    // адрес сменился (вкладка, ссылка, кнопка в шапке) — пересчитать режим
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        ReadMode();
+        StateHasChanged();
+    }
+
+    // по адресу страницы понять, что показать
+    private void ReadMode()
+    {
+        var path = new Uri(Nav.Uri).AbsolutePath;   // например "/staff"
+        mode = path.StartsWith("/staff") ? "staff"
+             : path.StartsWith("/register") ? "register"
+             : "login";
+        error = null;
+    }
+
+    // ушли со страницы — отписаться
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+
+    private void Switch(string to)
+    {
+        Nav.NavigateTo(to);   // адрес поменяется, дальше сработает OnLocationChanged
+    }
 
     private async Task DoLogin()
     {
-        error = await Auth.Login(login, password);
+        error = await Auth.Login(login, password, mode == "staff");
         if (error == null)
             Nav.NavigateTo(Auth.Role == "Admin" ? "/admin" : "/");   // админ — к записям, студент — на главную
+    }
+
+    private async Task DoRegister()
+    {
+        if (fullName == "" || group == "" || login == "" || password == "")
+        {
+            error = "Заполните все поля";
+            return;
+        }
+        if (password.Length < 6)
+        {
+            error = "Пароль должен быть не короче 6 символов";
+            return;
+        }
+
+        var resp = await Http.PostAsJsonAsync("api/auth/register", new { login, password, fullName, group });
+        if (!resp.IsSuccessStatusCode)
+        {
+            error = await resp.Content.ReadAsStringAsync();   // например "уже зарегистрирован"
+            return;
+        }
+
+        // сразу входим, чтобы не вводить пароль второй раз
+        error = await Auth.Login(login, password);
+        if (error == null)
+            Nav.NavigateTo("/");
     }
 }

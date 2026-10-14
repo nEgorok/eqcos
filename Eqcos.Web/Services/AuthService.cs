@@ -40,9 +40,9 @@ public class AuthService
     }
 
     // вернёт null, если всё ок, или текст ошибки
-    public async Task<string?> Login(string login, string password)
+    public async Task<string?> Login(string login, string password, bool staff = false)
     {
-        var resp = await _http.PostAsJsonAsync("api/auth/login", new { login, password });
+        var resp = await _http.PostAsJsonAsync("api/auth/login", new { login, password, staff });
         if (!resp.IsSuccessStatusCode)
             return await resp.Content.ReadAsStringAsync();
 

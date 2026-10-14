@@ -5,6 +5,7 @@
 @implements IDisposable
 
 <PageTitle>Запись в учебную часть</PageTitle>
+<h1>Запись в учебную часть</h1>
 
 @* ---- Уведомления ---- *@
 @if (notifications != null)
@@ -57,7 +58,7 @@
 
 @if (message != null)
 {
-    <div class="alert alert-secondary">@message</div>
+    <div class="eq-toast">@message</div>
 }
 
 @* ---- Вкладки корпусов ---- *@
@@ -240,5 +241,21 @@ else
         var resp = await Http.PostAsync($"api/notifications/{id}/other", null);
         message = await resp.Content.ReadAsStringAsync();
         await LoadAll();
+    }
+        // показать сообщение и убрать его через 5 секунд
+    private void Say(string text)
+    {
+        message = text;
+        _ = HideLater(text);   // "_ =" — запустить и не ждать
+    }
+
+    private async Task HideLater(string text)
+    {
+        await Task.Delay(5000);
+        if (message == text)   // если за это время не пришло новое сообщение
+        {
+            message = null;
+            StateHasChanged();
+        }
     }
 }

@@ -1,15 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Eqcos.Web</title>
+    <title>Электронная очередь — КГАМТ</title>
     <base href="/" />
     <link rel="preload" id="webassembly" />
+
+    <!-- шрифты как на сайте техникума -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Unbounded:wght@500;700;800&display=swap" rel="stylesheet" />
+
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/png" href="img/logo.png" />
     <link href="Eqcos.Web.styles.css" rel="stylesheet" />
     <script type="importmap"></script>
 </head>
@@ -24,8 +30,8 @@
     </div>
 
     <div id="blazor-error-ui">
-        An unhandled error has occurred.
-        <a href="." class="reload">Reload</a>
+        Произошла ошибка.
+        <a href="." class="reload">Обновить страницу</a>
         <span class="dismiss">🗙</span>
     </div>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
