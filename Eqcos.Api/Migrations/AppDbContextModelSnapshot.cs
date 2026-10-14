@@ -58,6 +58,35 @@ namespace Eqcos.Api.Migrations
                     b.ToTable("Bookings");
                 });
 
+            modelBuilder.Entity("Eqcos.Api.Models.Closure", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<TimeOnly>("End")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<int>("OfficeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<TimeOnly>("Start")
+                        .HasColumnType("time without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Closures");
+                });
+
             modelBuilder.Entity("Eqcos.Api.Models.Office", b =>
                 {
                     b.Property<int>("Id")

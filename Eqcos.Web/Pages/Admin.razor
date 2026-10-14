@@ -17,22 +17,53 @@ else
                @onchange="DateChanged" />
     </div>
 
-    @* ---- Назначить вызов ---- *@
-    <div class="card mb-3" style="max-width:520px">
-        <div class="card-body">
-            <h5 class="card-title">Вызов на профбеседу (30 минут)</h5>
-            <div class="d-flex gap-2">
-                <input class="form-control" placeholder="Номер студенческого" @bind="summonLogin" />
-                <input type="time" step="300" class="form-control" style="max-width:130px" @bind="summonTime" />
-                <button class="btn btn-warning" @onclick="Summon">Вызвать</button>
+    <div class="d-flex flex-wrap gap-3 mb-3">
+        @* ---- Назначить вызов ---- *@
+        <div class="card" style="max-width:520px">
+            <div class="card-body">
+                <h5 class="card-title">Вызов на профбеседу (30 минут)</h5>
+                <div class="d-flex gap-2">
+                    <input class="form-control" placeholder="Номер студенческого" @bind="summonLogin" />
+                    <input type="time" step="300" class="form-control" style="max-width:130px" @bind="summonTime" />
+                    <button class="btn btn-warning" @onclick="Summon">Вызвать</button>
+                </div>
+                <small class="text-muted">На выбранный выше день</small>
             </div>
-            <small class="text-muted">На выбранный выше день</small>
+        </div>
+
+        @* ---- Закрыть время ---- *@
+        <div class="card" style="max-width:620px">
+            <div class="card-body">
+                <h5 class="card-title">Закрыть время</h5>
+                <div class="d-flex gap-2">
+                    <input type="time" step="300" class="form-control" style="max-width:130px" @bind="closeStart" />
+                    <input type="time" step="300" class="form-control" style="max-width:130px" @bind="closeEnd" />
+                    <input class="form-control" placeholder="Причина (Совещание)" @bind="closeReason" />
+                    <button class="btn btn-secondary" @onclick="CloseTime">Закрыть</button>
+                </div>
+                <small class="text-muted">С — по, на выбранный выше день. Весь день: 08:00 — 16:30</small>
+            </div>
         </div>
     </div>
 
     @if (message != null)
     {
         <div class="alert alert-secondary">@message</div>
+    }
+
+    @* ---- Закрытое время на день ---- *@
+    @if (closures != null && closures.Count > 0)
+    {
+        <h5>Закрытое время</h5>
+        <ul class="list-group mb-3" style="max-width:620px">
+            @foreach (var c in closures)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>@c.Start.ToString("HH:mm")–@c.End.ToString("HH:mm"): @c.Reason</span>
+                    <button class="btn btn-sm btn-outline-success" @onclick="() => OpenTime(c.Id)">Открыть</button>
+                </li>
+            }
+        </ul>
     }
 
     @if (bookings == null)
@@ -75,13 +106,19 @@ else
 
 @code {
     private record BookingDto(int Id, TimeOnly Time, string StudentName, string Group, string Purpose);
+    private record ClosureDto(int Id, TimeOnly Start, TimeOnly End, string Reason);
 
     private DateOnly date = DateOnly.FromDateTime(DateTime.Now);
     private List<BookingDto>? bookings;
+    private List<ClosureDto>? closures;
     private string? message;
 
-    private string summonLogin = "";      // номер студенческого
-    private TimeOnly summonTime = new TimeOnly(14, 0);  // время вызова
+    private string summonLogin = "";
+    private TimeOnly summonTime = new TimeOnly(14, 0);
+
+    private TimeOnly closeStart = new TimeOnly(10, 0);   // закрыть с
+    private TimeOnly closeEnd = new TimeOnly(11, 0);     // закрыть по
+    private string closeReason = "Совещание";
 
     protected override async Task OnInitializedAsync()
     {
@@ -93,6 +130,8 @@ else
     {
         bookings = await Http.GetFromJsonAsync<List<BookingDto>>(
             $"api/slots/bookings?date={date:yyyy-MM-dd}");
+        closures = await Http.GetFromJsonAsync<List<ClosureDto>>(
+            $"api/closures/mine?date={date:yyyy-MM-dd}");
     }
 
     private async Task DateChanged(ChangeEventArgs e)
@@ -105,7 +144,6 @@ else
         }
     }
 
-    // назначить вызов
     private async Task Summon()
     {
         if (summonLogin == "")
@@ -120,6 +158,28 @@ else
             date = date.ToString("yyyy-MM-dd"),
             time = summonTime.ToString("HH:mm:ss")
         });
+        message = await resp.Content.ReadAsStringAsync();
+        await Load();
+    }
+
+    // закрыть время
+    private async Task CloseTime()
+    {
+        var resp = await Http.PostAsJsonAsync("api/closures", new
+        {
+            date = date.ToString("yyyy-MM-dd"),
+            start = closeStart.ToString("HH:mm:ss"),
+            end = closeEnd.ToString("HH:mm:ss"),
+            reason = closeReason
+        });
+        message = await resp.Content.ReadAsStringAsync();
+        await Load();
+    }
+
+    // открыть время обратно
+    private async Task OpenTime(int id)
+    {
+        var resp = await Http.DeleteAsync($"api/closures/{id}");
         message = await resp.Content.ReadAsStringAsync();
         await Load();
     }

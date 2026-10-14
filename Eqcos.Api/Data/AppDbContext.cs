@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Office> Offices { get; set; }
     public DbSet<Purpose> Purposes { get; set; }
+    public DbSet<Closure> Closures { get; set; }
 
     // начальные данные: три корпуса сразу попадут в базу при миграции
     protected override void OnModelCreating(ModelBuilder mb)

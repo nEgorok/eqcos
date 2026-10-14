@@ -243,15 +243,22 @@ public class SlotsController : ControllerBase
         _db.Purposes.Where(p => p.AdminOnly).Select(p => p.Id).ToList();
 
     // занятые отрезки (начало, конец) в корпусе на день
+    // занятые отрезки (начало, конец) в корпусе на день: записи + закрытое время
     private List<(TimeOnly Start, TimeOnly End)> Busy(int officeId, DateOnly date)
     {
         var minutes = _db.Purposes.ToDictionary(p => p.Id, p => p.Minutes);
 
-        return _db.Bookings
+        var bookings = _db.Bookings
             .Where(b => b.OfficeId == officeId && b.Date == date)
             .ToList()
-            .Select(b => (b.Time, b.Time.AddMinutes(minutes.GetValueOrDefault(b.PurposeId, Step))))
-            .ToList();
+            .Select(b => (b.Time, b.Time.AddMinutes(minutes.GetValueOrDefault(b.PurposeId, Step))));
+
+        var closures = _db.Closures
+            .Where(c => c.OfficeId == officeId && c.Date == date)
+            .ToList()
+            .Select(c => (c.Start, c.End));
+
+        return bookings.Concat(closures).ToList();   // склеиваем два списка в один
     }
 
     // пересекается ли start..end хоть с одним занятым отрезком
