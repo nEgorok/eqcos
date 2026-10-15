@@ -1,4 +1,6 @@
 ﻿@inject AuthService Auth
+@inject ApiState Api
+@inject NavigationManager Nav
 @inherits LayoutComponentBase
 
 <header class="eq-header">
@@ -39,7 +41,7 @@
             @if (Auth.IsLoggedIn)
             {
                 <a class="btn eq-btn eq-btn-blue" href="profile">Профиль</a>
-                <button class="btn eq-btn eq-btn-green" @onclick="() => Auth.Logout()">Выйти</button>
+                <button class="btn eq-btn eq-btn-green" @onclick="Logout">Выйти</button>
             }
             else
             {
@@ -50,8 +52,27 @@
     </div>
 </header>
 
+@* ---- Нет связи с сервером ---- *@
+@if (Api.Offline)
+{
+    <div class="eq-offline">
+        Нет связи с сервером. Проверьте интернет или попробуйте чуть позже.
+    </div>
+}
+
 <main class="eq-container eq-main">
-    @Body
+    @* ErrorBoundary ловит ошибку внутри страницы и показывает ErrorContent вместо жёлтой полоски внизу *@
+    <ErrorBoundary @ref="boundary">
+        <ChildContent>
+            @Body
+        </ChildContent>
+        <ErrorContent>
+            <div class="alert alert-danger">
+                @(Api.Offline ? "Не удалось связаться с сервером." : "Что-то пошло не так.")
+                <button class="btn btn-sm btn-outline-danger ms-2" @onclick="Reload">Обновить страницу</button>
+            </div>
+        </ErrorContent>
+    </ErrorBoundary>
 </main>
 
 <footer class="eq-footer">
@@ -61,6 +82,33 @@
 </footer>
 
 @code {
-    // при входе/выходе перерисовать шапку
-    protected override void OnInitialized() => Auth.Changed += StateHasChanged;
+    private ErrorBoundary? boundary;
+
+    protected override void OnInitialized()
+    {
+        Auth.Changed += StateHasChanged;                              // вошли/вышли — перерисовать шапку
+        Api.Changed += () => InvokeAsync(StateHasChanged);            // связь пропала/появилась — плашка
+        Api.Unauthorized += () => InvokeAsync(SessionExpired);        // вход истёк — на окно входа
+        Nav.LocationChanged += (_, _) => boundary?.Recover();         // перешли на другую страницу — убрать ошибку
+    }
+
+    // «Выйти» — выходим и сразу открываем окно входа
+    private async Task Logout()
+    {
+        await Auth.Logout();
+        Nav.NavigateTo("login");
+    }
+
+    // сервер ответил 401: пропуск истёк (8 часов) или аккаунт удалён
+    private async Task SessionExpired()
+    {
+        if (!Auth.IsLoggedIn)
+            return;   // уже вышли (несколько запросов получили 401 одновременно)
+
+        await Auth.Logout();
+        Nav.NavigateTo("login?expired=1");
+    }
+
+    // перезагрузить сайт целиком
+    private void Reload() => Nav.NavigateTo(Nav.Uri, forceLoad: true);
 }

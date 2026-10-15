@@ -180,10 +180,17 @@ else
         timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
-            {
-                await LoadAll(quiet: true);
-                StateHasChanged();
-            });
+   {
+       try
+       {
+           await LoadAll(quiet: true);
+           StateHasChanged();
+       }
+       catch (HttpRequestException)
+       {
+           // нет связи или вход истёк — шапка уже показала, что случилось; попробуем через 5 секунд
+       }
+   });
         }, null, 5000, 5000);
     }
 

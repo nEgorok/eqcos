@@ -84,9 +84,9 @@ else
     <div class="card mb-3" style="max-width:520px">
         <div class="card-body">
             <h5 class="card-title">Сменить пароль</h5>
-            <input class="form-control mb-2" type="password" placeholder="Старый пароль" @bind="oldPassword" />
-            <input class="form-control mb-2" type="password" placeholder="Новый пароль" @bind="newPassword" />
-            <input class="form-control mb-2" type="password" placeholder="Повторите новый пароль" @bind="repeat" />
+            <PasswordInput Class="mb-2" Placeholder="Старый пароль" @bind-Value="oldPassword" />
+            <PasswordInput Class="mb-2" Placeholder="Новый пароль" @bind-Value="newPassword" />
+            <PasswordInput Class="mb-2" Placeholder="Повторите новый пароль" @bind-Value="repeat" />
             <button class="btn btn-primary" @onclick="ChangePassword">Сменить пароль</button>
         </div>
     </div>
@@ -98,7 +98,7 @@ else
             <div class="card-body">
                 <h5 class="card-title text-danger">Удалить аккаунт</h5>
                 <p class="small text-muted mb-2">Будущие записи будут отменены. Восстановить аккаунт нельзя — только зарегистрироваться заново.</p>
-                <input class="form-control mb-2" type="password" placeholder="Пароль для подтверждения" @bind="deletePassword" />
+                <PasswordInput Class="mb-2" Placeholder="Пароль для подтверждения" @bind-Value="deletePassword" />
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" id="sure" @bind="sure" />
                     <label class="form-check-label" for="sure">Я понимаю, что аккаунт удалится навсегда</label>

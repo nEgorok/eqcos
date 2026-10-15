@@ -115,7 +115,9 @@
     padding: 1.2rem 0;
     font-size: 0.8rem;
     color: #555;
+    text-align: center; /* подпись по центру */
 }
+
 
 /* ===== Телефон ===== */
 @media (max-width: 860px) {
@@ -142,29 +144,12 @@
         gap: 1rem;
     }
 }
-/* ===== Спокойный вариант (перекрывает то, что выше) ===== */
-.eq-brand img {
-    height: 52px;
-}
-
+/* ===== Тоньше шрифт (перекрывает то, что выше) ===== */
 .eq-brand span {
-    font-family: 'Montserrat', sans-serif;
-    text-transform: none;
-    font-weight: 600;
-    font-size: 0.9rem;
+    font-weight: 500;
 }
 
 .eq-service {
-    font-family: 'Montserrat', sans-serif;
-    text-transform: none;
-    letter-spacing: normal;
-    font-weight: 600;
-    font-size: 0.95rem;
-}
-
-::deep .eq-user {
-    text-transform: none;
-    letter-spacing: normal;
-    font-size: 0.9rem;
-    font-weight: 600;
+    font-weight: 500;
+    letter-spacing: 0.05em;
 }

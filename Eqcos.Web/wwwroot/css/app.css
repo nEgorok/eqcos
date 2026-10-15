@@ -386,39 +386,52 @@ a, .btn-link {
         .eq-auth-foot a:hover {
             text-decoration: underline;
         }
-/* ===== Спокойный вариант (перекрывает то, что выше) ===== */
-h1, h2, h3, h4, h5, .eq-title {
-    font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
-    text-transform: none;
+/* ===== Поле пароля с глазиком ===== */
+.eq-pass {
+    position: relative;
 }
 
+    .eq-pass .form-control {
+        padding-right: 2.6rem; /* место под глазик, чтобы текст под него не заезжал */
+    }
+
+.eq-eye {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0.2rem;
+    opacity: 0.6;
+    cursor: pointer;
+}
+
+    .eq-eye:hover {
+        opacity: 1;
+    }
+
+/* ===== Плашка «Нет связи с сервером» ===== */
+.eq-offline {
+    background: var(--eq-pink);
+    color: #7a1020;
+    text-align: center;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+}
+/* ===== Тоньше шрифт (перекрывает то, что выше) ===== */
 h1 {
-    font-weight: 700;
-    font-size: clamp(1.4rem, 3vw, 1.9rem);
+    font-weight: 600;
+    letter-spacing: 0.01em;
 }
 
 h2 {
-    font-weight: 600;
-    font-size: 1.25rem;
+    font-weight: 500;
 }
 
 .eq-btn {
-    text-transform: none;
-    letter-spacing: normal;
-    font-size: 0.9rem;
-    padding: 0.5rem 1.1rem;
-}
-
-.eq-auth-tabs {
-    background: #E3E5EA;
-}
-
-    .eq-auth-tabs button.active {
-        background: #fff;
-        color: var(--eq-blue);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    }
-
-.eq-auth-title {
-    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
 }
