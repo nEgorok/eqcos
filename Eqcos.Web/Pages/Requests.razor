@@ -19,7 +19,7 @@ else
 
     @if (message != null)
     {
-        <div class="alert alert-secondary">@message</div>
+        <div class="eq-toast">@message</div>
     }
 
     @if (list.Count == 0)
@@ -30,15 +30,36 @@ else
     {
         <table class="table align-middle">
             <thead>
-                <tr><th>Студенческий</th><th>ФИО</th><th>Группа</th><th></th></tr>
+                <tr><th>Студенческий</th><th>Заявка</th><th>ФИО</th><th>Группа</th><th></th></tr>
             </thead>
             <tbody>
                 @foreach (var s in list)
                 {
                     <tr>
                         <td>@s.Login</td>
-                        <td>@s.FullName</td>
-                        <td>@s.Group</td>
+                        <td>@s.Kind</td>
+                        <td>
+                            @if (s.NewFullName != null && s.NewFullName != s.FullName)
+                            {
+                                <span class="text-muted text-decoration-line-through">@s.FullName</span><br />
+                                <b>@s.NewFullName</b>
+                            }
+                            else
+                            {
+                                @s.FullName
+                            }
+                        </td>
+                        <td>
+                            @if (s.NewGroup != null && s.NewGroup != s.Group)
+                            {
+                                <span class="text-muted text-decoration-line-through">@s.Group</span><br />
+                                <b>@s.NewGroup</b>
+                            }
+                            else
+                            {
+                                @s.Group
+                            }
+                        </td>
                         <td>
                             <div class="d-flex gap-2">
                                 <button class="btn btn-sm btn-success" @onclick="() => Approve(s.Id)">Подтвердить</button>
@@ -55,7 +76,8 @@ else
 }
 
 @code {
-    private record RequestDto(int Id, string Login, string FullName, string Group);
+    private record RequestDto(int Id, string Login, string Kind, string FullName, string Group,
+                              string? NewFullName, string? NewGroup);
 
     private List<RequestDto>? list;
     private Dictionary<int, string> reasons = new();   // Id студента -> введённая причина
@@ -79,15 +101,38 @@ else
 
     private async Task Approve(int id)
     {
-        var resp = await Http.PostAsync($"api/requests/{id}/approve", null);
-        message = await resp.Content.ReadAsStringAsync();
+        var s = list!.First(x => x.Id == id);
+        // отправляем то, что админ видит на экране
+        var resp = await Http.PostAsJsonAsync($"api/requests/{id}/approve",
+            new { fullName = s.NewFullName ?? s.FullName, group = s.NewGroup ?? s.Group });
+        Say(await resp.Content.ReadAsStringAsync());
         await Load();
     }
 
     private async Task Reject(int id)
     {
-        var resp = await Http.PostAsJsonAsync($"api/requests/{id}/reject", new { reason = reasons[id] });
-        message = await resp.Content.ReadAsStringAsync();
+        var s = list!.First(x => x.Id == id);
+        var resp = await Http.PostAsJsonAsync($"api/requests/{id}/reject",
+            new { reason = reasons[id], fullName = s.NewFullName ?? s.FullName, group = s.NewGroup ?? s.Group });
+        Say(await resp.Content.ReadAsStringAsync());
+        reasons[id] = "";
         await Load();
+    }
+
+    // показать сообщение и убрать его через 5 секунд
+    private void Say(string text)
+    {
+        message = text;
+        _ = HideLater(text);
+    }
+
+    private async Task HideLater(string text)
+    {
+        await Task.Delay(5000);
+        if (message == text)
+        {
+            message = null;
+            StateHasChanged();
+        }
     }
 }

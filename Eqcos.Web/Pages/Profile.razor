@@ -40,6 +40,13 @@ else
                 {
                     <div class="alert alert-danger py-2">Причина: @profile.RejectReason</div>
                 }
+                @if (profile.PendingFullName != null || profile.PendingGroup != null)
+                {
+                    <div class="alert alert-warning py-2">
+                        На проверке изменение: @profile.PendingFullName, группа @profile.PendingGroup.
+                        Пока действуют прежние данные.
+                    </div>
+                }
                 <label class="form-label mb-0">ФИО</label>
                 <input class="form-control mb-2" @bind="editName" />
                 <label class="form-label mb-0">Группа</label>
@@ -104,8 +111,8 @@ else
 
 @code {
     private record ProfileDto(string Login, string FullName, string Group, string Role, string? Office,
-                              string Status, string? RejectReason);
-
+                              string Status, string? RejectReason,
+                              string? PendingFullName, string? PendingGroup);
     // статус по-русски
     private static string StatusText(string s) => s switch
     {
@@ -140,8 +147,13 @@ else
     private async Task Load()
     {
         profile = await Http.GetFromJsonAsync<ProfileDto>("api/profile");
-        editName = profile!.FullName;
-        editGroup = profile.Group;
+        // если есть заявка на изменение — в полях показываем её, иначе текущие данные
+        editName = profile!.PendingFullName ?? profile.FullName;
+        editGroup = profile.PendingGroup ?? profile.Group;
+
+        // админ подтвердил новое ФИО — обновить имя справа сверху без перевхода
+        if (Auth.FullName != profile.FullName)
+            await Auth.SetFullName(profile.FullName);
 
         if (profile.Role == "Student")
             myBookings = await Http.GetFromJsonAsync<List<MyBookingDto>>("api/slots/my");
@@ -160,8 +172,8 @@ else
         await Show(resp);
         if (ok)
         {
-            await Auth.SetFullName(editName.Trim());   // обновить имя справа сверху
             await Load();
+            await Auth.SetFullName(profile!.FullName);   // справа сверху — то ФИО, что реально действует
         }
     }
 

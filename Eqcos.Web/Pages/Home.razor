@@ -37,6 +37,12 @@
         Исправьте данные в <a href="profile">профиле</a>, и они снова уйдут на проверку.
     </div>
 }
+@if (me != null && me.Status == "Approved" && (me.PendingFullName != null || me.PendingGroup != null))
+{
+    <div class="alert alert-warning">
+        Изменение ваших данных на проверке в учебной части. Записываться можно, пока действуют прежние данные.
+    </div>
+}
 @* ---- Мои записи (студент) ---- *@
 @if (Auth.IsLoggedIn && Auth.Role == "Student" && myBookings != null)
 {
@@ -128,7 +134,7 @@ else
     private record PurposeDto(int Id, string Name, int Minutes);
     private record MyBookingDto(int Id, string Text, bool CanCancel);
     private record NotificationDto(int Id, string Text, bool CanChange);
-    private record StatusDto(string Status, string? RejectReason);
+    private record StatusDto(string Status, string? RejectReason, string? PendingFullName, string? PendingGroup);
     private StatusDto? me;   // статус моей учётной записи
 
     private List<OfficeDto>? offices;

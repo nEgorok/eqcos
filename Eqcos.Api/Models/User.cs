@@ -11,5 +11,6 @@ public class User
     public int? OfficeId { get; set; }  // только у админа: какой корпус он ведёт (у студента пусто)
     public string Status { get; set; } = "Pending";   // "Pending" — на проверке, "Approved" — подтверждён, "Rejected" — отклонён
     public string? RejectReason { get; set; }         // почему отклонили (видит студент)
-
+    public string? PendingFullName { get; set; }   // новое ФИО, ждёт проверки (null — заявки нет)
+    public string? PendingGroup { get; set; }      // новая группа, ждёт проверки
 }

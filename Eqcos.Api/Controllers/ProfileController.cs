@@ -36,9 +36,19 @@ public class ProfileController : ControllerBase
 
         var office = u.OfficeId == null ? null : _db.Offices.Find(u.OfficeId)?.Name;
 
-        return Ok(new { u.Login, u.FullName, u.Group, u.Role, Office = office, u.Status, u.RejectReason });
+        return Ok(new
+        {
+            u.Login,
+            u.FullName,
+            u.Group,
+            u.Role,
+            Office = office,
+            u.Status,
+            u.RejectReason,
+            u.PendingFullName,
+            u.PendingGroup
+        });
     }
-
     // СТУДЕНТ: изменить ФИО и группу
     [Authorize(Roles = "Student")]
     [HttpPut]
@@ -51,26 +61,32 @@ public class ProfileController : ControllerBase
 
         var u = _db.Users.Find(CurrentUserId)!;
 
-        // данные поменялись — снова на проверку
-        var changed = u.FullName != fullName || u.Group != group;
-        if (changed)
+        if (u.Status == "Approved")
         {
-            u.Status = "Pending";
-            u.RejectReason = null;
+            // вернул как было — заявку на изменение снимаем
+            if (u.FullName == fullName && u.Group == group)
+            {
+                u.PendingFullName = null;
+                u.PendingGroup = null;
+                _db.SaveChanges();
+                return Ok("Данные не изменились");
+            }
+
+            // подтверждённый: старые данные продолжают действовать, новые — на проверку
+            u.PendingFullName = fullName;
+            u.PendingGroup = group;
+            _db.SaveChanges();
+            return Ok("Изменения отправлены на проверку в учебную часть. Пока действуют прежние данные.");
         }
 
+        // ещё не подтверждён или отклонён: правим сразу и (снова) отправляем на проверку.
+        // Даже если данные те же — отклонённый может отправить их повторно (вдруг отклонили по ошибке).
         u.FullName = fullName;
         u.Group = group;
-
-        // в будущих записях тоже обновить, чтобы админ видел новые данные
-        foreach (var b in _db.Bookings.Where(b => b.StudentId == u.Id && b.Date >= Today))
-        {
-            b.StudentName = fullName;
-            b.Group = group;
-        }
-
+        u.Status = "Pending";
+        u.RejectReason = null;
         _db.SaveChanges();
-        return Ok(changed ? "Данные сохранены и отправлены на проверку в учебную часть" : "Данные сохранены");
+        return Ok("Данные сохранены и отправлены на проверку в учебную часть");
     }
 
     // СТУДЕНТ: удалить аккаунт (нужен пароль)

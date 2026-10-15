@@ -254,6 +254,12 @@ namespace Eqcos.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("PendingFullName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PendingGroup")
+                        .HasColumnType("text");
+
                     b.Property<string>("RejectReason")
                         .HasColumnType("text");
 
