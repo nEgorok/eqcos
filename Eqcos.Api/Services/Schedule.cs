@@ -1,5 +1,6 @@
 ﻿using Eqcos.Api.Data;
 using Eqcos.Api.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Eqcos.Api.Services;
 
@@ -40,15 +41,16 @@ public static class Schedule
         return busy.Any(x => start < x.End && x.Start < end);
     }
 
-    // занятые отрезки в корпусе на день: записи + закрытое время
-    public static List<(TimeOnly Start, TimeOnly End)> Busy(AppDbContext db, int officeId, DateOnly date)
+    // занятые отрезки в корпусе на день: ДЕЙСТВУЮЩИЕ записи + закрытое время.
+    // except — записи, которые не считать (те, что сейчас переносим)
+    public static List<(TimeOnly Start, TimeOnly End)> Busy(AppDbContext db, int officeId, DateOnly date,
+        ICollection<int>? except = null)
     {
-        var minutes = db.Purposes.ToDictionary(p => p.Id, p => p.Minutes);
-
         var bookings = db.Bookings
-            .Where(b => b.OfficeId == officeId && b.Date == date)
+            .Where(b => b.OfficeId == officeId && b.Date == date && b.Status == BookingStatus.Active)
             .ToList()
-            .Select(b => (b.Time, b.Time.AddMinutes(minutes.GetValueOrDefault(b.PurposeId, Step))));
+            .Where(b => except == null || !except.Contains(b.Id))
+            .Select(b => (b.Time, b.Time.AddMinutes(b.Minutes)));
 
         var closures = db.Closures
             .Where(c => c.OfficeId == officeId && c.Date == date)
@@ -57,4 +59,17 @@ public static class Schedule
 
         return bookings.Concat(closures).ToList();
     }
+
+    // ---------- ОЧЕРЕДЬ ----------
+    // Блокировка PostgreSQL до конца транзакции. Второй запрос с теми же числами
+    // ждёт, пока первый не закончит. Так два человека не займут одно время одновременно.
+    // Работает только внутри BeginTransaction().
+
+    // запись в корпус на этот день — строго по одному
+    public static void LockDay(AppDbContext db, int officeId, DateOnly date) =>
+        db.Database.ExecuteSqlRaw("SELECT pg_advisory_xact_lock({0}, {1})", officeId, date.DayNumber);
+
+    // действия одного студента — строго по одному (двойной клик не даст двух записей)
+    public static void LockStudent(AppDbContext db, int userId) =>
+        db.Database.ExecuteSqlRaw("SELECT pg_advisory_xact_lock({0}, {1})", 0, userId);
 }

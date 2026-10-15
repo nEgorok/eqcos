@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;     // НОВОЕ
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -50,6 +51,24 @@ app.UseHttpsRedirection();
 app.UseCors();
 
 app.UseAuthentication();
+
+// пропуск есть, а пользователя уже нет (аккаунт удалили в другой вкладке) —
+// отвечаем «войдите снова» (401), а не падаем с ошибкой 500
+app.Use(async (context, next) =>
+{
+    var id = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (int.TryParse(id, out var userId))
+    {
+        var db = context.RequestServices.GetRequiredService<AppDbContext>();
+        if (!await db.Users.AnyAsync(u => u.Id == userId))
+        {
+            context.Response.StatusCode = 401;
+            await context.Response.WriteAsync("Учётная запись не найдена. Войдите снова.");
+            return;
+        }
+    }
+    await next();
+});
 
 app.UseAuthorization();
 

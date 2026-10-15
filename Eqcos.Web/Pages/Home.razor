@@ -88,7 +88,9 @@
     <input type="date" class="form-control"
            value="@date.ToString("yyyy-MM-dd")"
            min="@today.ToString("yyyy-MM-dd")"
+           max="@maxDate.ToString("yyyy-MM-dd")"
            @onchange="DateChanged" />
+    <small class="text-muted">Запись — не дальше чем до @maxDate.ToString("dd.MM")</small>
 </div>
 
 @* ---- Цель визита ---- *@
@@ -110,6 +112,14 @@
 @if (slots == null)
 {
     <p>Загрузка...</p>
+}
+else if (IsWeekend(date))
+{
+    <p>Суббота и воскресенье — выходные, учебная часть не работает</p>
+}
+else if (date > maxDate)
+{
+    <p>Записаться можно не дальше чем до @maxDate.ToString("dd.MM")</p>
 }
 else if (slots.Count == 0)
 {
@@ -141,8 +151,10 @@ else
     private List<PurposeDto>? purposes;
     private int officeId = 1;
     private int purposeId = 0;
-    private static DateOnly today = DateOnly.FromDateTime(DateTime.Now);
-    private DateOnly date = today;
+    private record CalendarDto(DateOnly Today, DateOnly MaxDate);
+    private DateOnly today;     // сегодня по Москве (берём с сервера, а не с часов компьютера)
+    private DateOnly maxDate;   // последний день, на который можно записаться
+    private DateOnly date;      // выбранный день
 
     private List<string>? slots;
     private List<MyBookingDto>? myBookings;
@@ -153,6 +165,13 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var calendar = (await Http.GetFromJsonAsync<CalendarDto>("api/calendar"))!;
+        today = calendar.Today;
+        maxDate = calendar.MaxDate;
+        date = today;
+        while (IsWeekend(date))
+            date = date.AddDays(1);   // сегодня выходной — сразу показываем понедельник
+
         offices = await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices");
         purposes = await Http.GetFromJsonAsync<List<PurposeDto>>("api/purposes");
         await LoadAll();
@@ -170,6 +189,9 @@ else
 
     // ушли со страницы — остановить таймер
     public void Dispose() => timer?.Dispose();
+
+    private static bool IsWeekend(DateOnly d) =>
+        d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday;
 
     private async Task LoadAll(bool quiet = false)
     {

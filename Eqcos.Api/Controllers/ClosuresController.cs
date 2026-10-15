@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Eqcos.Api.Models;
 using Eqcos.Api.Data;
+using Eqcos.Api.Services;
 using static Eqcos.Api.Services.Schedule;
 
 namespace Eqcos.Api.Controllers;
@@ -25,8 +26,6 @@ public class ClosuresController : ControllerBase
     private int? CurrentOfficeId =>
         int.TryParse(User.FindFirst("office")?.Value, out var id) ? id : null;
 
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
-
     // АДМИН: закрытия СВОЕГО корпуса на день
     [Authorize(Roles = "Admin")]
     [HttpGet("mine")]
@@ -47,13 +46,17 @@ public class ClosuresController : ControllerBase
         if (office == null)
             return BadRequest("У учётной записи не указан корпус");
 
-        if (r.Date < Today)
+        if (r.Date < Clock.Today)
             return BadRequest("Нельзя закрыть прошедший день");
 
         if (r.Start >= r.End)
             return BadRequest("Время «с» должно быть раньше, чем «по»");
 
         var reason = string.IsNullOrWhiteSpace(r.Reason) ? "Приёма нет" : r.Reason.Trim();
+
+        // всё закрытие — одна транзакция: или всё перенеслось, или ничего не поменялось
+        using var tx = _db.Database.BeginTransaction();
+        LockDay(_db, office.Id, r.Date);
 
         _db.Closures.Add(new Closure
         {
@@ -65,13 +68,18 @@ public class ClosuresController : ControllerBase
         });
         _db.SaveChanges();
 
-        var (moved, summons) = MoveDisplaced(office, r.Date, r.Start, r.End);
+        var (moved, cancelled, summons) = MoveDisplaced(office, r.Date, r.Start, r.End);
+        tx.Commit();
 
         var text = $"Закрыто {r.Date:dd.MM} с {r.Start:HH:mm} до {r.End:HH:mm}: {reason}";
         if (moved > 0)
-            text += $". Перенесено записей: {moved}, студенты увидят уведомление.";
-        if (summons > 0)
-            text += $" Внимание: в это время есть вызовы ({summons}) — перенесите их сами.";
+            text += $". Перенесено записей: {moved}";
+        if (cancelled > 0)
+            text += $". Отменено (некуда перенести): {cancelled}";
+        if (summons.Count > 0)
+            text += $". Отменены вызовы, назначьте их заново: {string.Join(", ", summons)}";
+        if (moved + cancelled + summons.Count > 0)
+            text += ". Студенты увидят уведомление.";
 
         return Ok(text);
     }
@@ -92,36 +100,45 @@ public class ClosuresController : ControllerBase
 
     // ---------- ПЕРЕНОС ----------
 
-    // переносит записи студентов из закрытого времени; возвращает (сколько перенесли, сколько вызовов внутри)
-    private (int Moved, int Summons) MoveDisplaced(Office office, DateOnly date, TimeOnly start, TimeOnly end)
+    // убирает записи из закрытого времени.
+    // Записи студентов переносятся в порядке очереди, вызовы отменяются (их админ назначает заново).
+    // Возвращает: сколько перенесли, сколько отменили, кого из вызванных надо вызвать заново.
+    private (int Moved, int Cancelled, List<string> Summons) MoveDisplaced(Office office, DateOnly date, TimeOnly start, TimeOnly end)
     {
-        var purposes = _db.Purposes.ToList();
-        var minutes = purposes.ToDictionary(p => p.Id, p => p.Minutes);
-        var adminOnly = purposes.Where(p => p.AdminOnly).Select(p => p.Id).ToList();
+        var adminOnly = _db.Purposes.Where(p => p.AdminOnly).Select(p => p.Id).ToList();
 
-        // все записи, которые задевают закрытое время, по порядку очереди
+        // действующие записи, которые задевают закрытое время, по порядку очереди
         var inside = _db.Bookings
-            .Where(b => b.OfficeId == office.Id && b.Date == date)
+            .Where(b => b.OfficeId == office.Id && b.Date == date && b.Status == BookingStatus.Active)
             .ToList()
-            .Where(b => b.Time < end && start < b.Time.AddMinutes(minutes.GetValueOrDefault(b.PurposeId, Step)))
+            .Where(b => b.Time < end && start < b.Time.AddMinutes(b.Minutes))
             .OrderBy(b => b.Time).ThenBy(b => b.Id)
             .ToList();
 
-        var summons = inside.Count(b => adminOnly.Contains(b.PurposeId));
-        var students = inside.Where(b => !adminOnly.Contains(b.PurposeId)).ToList();
+        // 1) вызовы — отменить
+        var summons = new List<string>();
+        foreach (var b in inside.Where(b => adminOnly.Contains(b.PurposeId)))
+        {
+            b.Status = BookingStatus.SystemCancelled;
+            summons.Add($"{b.StudentName} ({b.Time:HH:mm})");
+            Notify(b.StudentId, null,
+                $"Вызов на {b.Date:dd.MM} {b.Time:HH:mm} отменён: учебная часть в это время не принимает. " +
+                "Учебная часть назначит новое время.");
+        }
+        _db.SaveChanges();
 
-        var moved = 0;
+        // 2) записи студентов — перенести на ближайшее свободное время
+        var students = inside.Where(b => !adminOnly.Contains(b.PurposeId)).ToList();
+        var waiting = students.Select(b => b.Id).ToHashSet();   // ещё не перенесённые: при поиске их не считаем
+
+        int moved = 0, cancelled = 0;
         foreach (var b in students)
         {
             var oldDate = b.Date;
             var oldTime = b.Time;
-            var len = minutes.GetValueOrDefault(b.PurposeId, Step);
 
-            // убираем запись "в сторону", чтобы она не мешала сама себе при поиске
-            b.Date = DateOnly.MinValue;
-            _db.SaveChanges();
-
-            var place = FindPlace(office, date, end, len);
+            var place = FindPlace(office, date, end, b.Minutes, waiting);
+            waiting.Remove(b.Id);
 
             if (place != null)
             {
@@ -134,33 +151,37 @@ public class ClosuresController : ControllerBase
             }
             else
             {
-                _db.Bookings.Remove(b);
+                b.Status = BookingStatus.SystemCancelled;
+                cancelled++;
                 Notify(b.StudentId, null,
                     $"Ваша запись на {oldDate:dd.MM} {oldTime:HH:mm} отменена: учебная часть не принимает, " +
                     "свободного времени для переноса нет. Запишитесь заново.");
             }
-            _db.SaveChanges();
+            _db.SaveChanges();   // внутри транзакции: следующий поиск уже видит это место занятым
         }
 
-        return (moved, summons);
+        return (moved, cancelled, summons);
     }
 
-    // ближайшее свободное место длиной len: сначала в этот день после "after", потом в следующие дни
-    private (DateOnly Date, TimeOnly Time)? FindPlace(Office office, DateOnly date, TimeOnly after, int len)
+    // ближайшее свободное место длиной len: сначала в этот день после "after", потом в следующие рабочие дни
+    private (DateOnly Date, TimeOnly Time)? FindPlace(Office office, DateOnly date, TimeOnly after, int len, ICollection<int> except)
     {
         for (var d = date; d <= date.AddDays(DaysAhead); d = d.AddDays(1))
         {
-            if (d.DayOfWeek == DayOfWeek.Sunday)
-                continue;   // в воскресенье не работают
+            if (!Clock.IsWorkday(d))
+                continue;   // суббота и воскресенье
 
-            var busy = Busy(_db, office.Id, d);
+            if (d != date)
+                LockDay(_db, office.Id, d);   // пока ищем место в этот день, туда никто не запишется
+
+            var busy = Busy(_db, office.Id, d, except);
 
             foreach (var t in GetSlots(office))
             {
                 if (d == date && t < after)
                     continue;   // в тот же день — только после закрытия
 
-                if (d == Today && t <= TimeOnly.FromDateTime(DateTime.Now))
+                if (d == Clock.Today && t <= Clock.Time)
                     continue;   // прошедшее время сегодня не предлагаем
 
                 if (Fits(office, t, len) && !Overlaps(busy, t, t.AddMinutes(len)))

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Eqcos.Api.Data;
+using Eqcos.Api.Models;
 
 namespace Eqcos.Api.Controllers;
 
@@ -54,8 +55,8 @@ public class NotificationsController : ControllerBase
         if (n.BookingId != null)
         {
             var b = _db.Bookings.Find(n.BookingId);
-            if (b != null && b.StudentId == CurrentUserId)
-                _db.Bookings.Remove(b);
+                if (b != null && b.StudentId == CurrentUserId && b.Status == BookingStatus.Active)
+                    b.Status = BookingStatus.Cancelled;   // отменил сам студент (перенесённую — без штрафа, шаг 24)
         }
 
         n.IsRead = true;

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Eqcos.Api.Data;
 using Eqcos.Api.Models;
+using Eqcos.Api.Services;
 
 namespace Eqcos.Api.Controllers;
 
@@ -24,7 +25,6 @@ public class ProfileController : ControllerBase
     }
 
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
 
     // мои данные
     [HttpGet]
@@ -101,7 +101,8 @@ public class ProfileController : ControllerBase
             return BadRequest("Неверный пароль");
 
         // будущие записи освобождаем, уведомления удаляем
-        _db.Bookings.RemoveRange(_db.Bookings.Where(b => b.StudentId == u.Id && b.Date >= Today));
+        foreach (var b in _db.Bookings.Where(b => b.StudentId == u.Id && b.Date >= Clock.Today && b.Status == BookingStatus.Active))
+            b.Status = BookingStatus.SystemCancelled;
         _db.Notifications.RemoveRange(_db.Notifications.Where(n => n.UserId == u.Id));
         _db.Users.Remove(u);
         _db.SaveChanges();

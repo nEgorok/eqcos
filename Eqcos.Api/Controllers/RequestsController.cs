@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Eqcos.Api.Data;
+﻿using Eqcos.Api.Data;
 using Eqcos.Api.Models;
+using Eqcos.Api.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Eqcos.Api.Controllers;
 
@@ -74,7 +75,7 @@ public class RequestsController : ControllerBase
             u.PendingGroup = null;
 
             // и в будущих записях, чтобы админ видел актуальные данные
-            foreach (var b in _db.Bookings.Where(b => b.StudentId == u.Id && b.Date >= Today))
+            foreach (var b in _db.Bookings.Where(b => b.StudentId == u.Id && b.Date >= Clock.Today && b.Status == BookingStatus.Active))
             {
                 b.StudentName = u.FullName;
                 b.Group = u.Group;

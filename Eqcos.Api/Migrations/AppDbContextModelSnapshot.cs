@@ -37,11 +37,18 @@ namespace Eqcos.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("Minutes")
+                        .HasColumnType("integer");
+
                     b.Property<int>("OfficeId")
                         .HasColumnType("integer");
 
                     b.Property<int>("PurposeId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("StudentId")
                         .HasColumnType("integer");
