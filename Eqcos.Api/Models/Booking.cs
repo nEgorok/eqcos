@@ -12,6 +12,8 @@ public class Booking
     public int PurposeId { get; set; }  // цель визита
     public int Minutes { get; set; }    // сколько длится приём (запоминаем при записи)
     public string Status { get; set; } = BookingStatus.Active;   // что с записью сейчас
+    public bool Moved { get; set; }     // true — запись переносила система (неявка по ней не наказывается)
+    public string? Note { get; set; }   // причина: почему удалил админ или отменила система
 }
 
 // возможные состояния записи. Запись больше не удаляется из базы — у неё меняется статус,

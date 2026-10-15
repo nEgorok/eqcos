@@ -1,10 +1,10 @@
-﻿@page "/admin"
+﻿@page "/admin/day"
 @inject HttpClient Http
 @inject AuthService Auth
 @implements IDisposable
 
-<PageTitle>Записи</PageTitle>
-<h1>Записи моего корпуса</h1>
+<PageTitle>Вызов и закрытие</PageTitle>
+<h1>Вызов и закрытие времени</h1>
 
 @if (Auth.Role != "Admin")
 {
@@ -14,8 +14,8 @@ else
 {
     <div class="mb-3" style="max-width:220px">
         <input type="date" class="form-control"
-               value="@date.ToString("yyyy-MM-dd")"
-               @onchange="DateChanged" />
+        value="@date.ToString("yyyy-MM-dd")"
+        @onchange="DateChanged" />
     </div>
 
     <div class="d-flex flex-wrap gap-3 mb-3">
@@ -89,7 +89,6 @@ else
                     <th>ФИО</th>
                     <th>Группа</th>
                     <th>Цель</th>
-                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -100,16 +99,12 @@ else
                         <td>@b.StudentName</td>
                         <td>@b.Group</td>
                         <td>@b.Purpose</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(b.Id)">Удалить</button>
-                        </td>
                     </tr>
                 }
             </tbody>
         </table>
     }
-}
-
+}   
 @code {
     private record BookingDto(int Id, TimeOnly Time, string StudentName, string Group, string Purpose);
     private record ClosureDto(int Id, TimeOnly Start, TimeOnly End, string Reason);
@@ -207,13 +202,6 @@ else
     private async Task OpenTime(int id)
     {
         var resp = await Http.DeleteAsync($"api/closures/{id}");
-        Say(await resp.Content.ReadAsStringAsync());
-        await Load();
-    }
-
-    private async Task Delete(int id)
-    {
-        var resp = await Http.DeleteAsync($"api/slots/bookings/{id}");
         Say(await resp.Content.ReadAsStringAsync());
         await Load();
     }

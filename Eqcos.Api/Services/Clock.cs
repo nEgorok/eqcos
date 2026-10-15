@@ -25,4 +25,17 @@ public static class Clock
     // приём ещё не закончился: день впереди, или сегодня и конец приёма позже, чем сейчас
     public static bool NotEnded(DateOnly date, TimeOnly start, int minutes) =>
         date > Today || (date == Today && start.AddMinutes(minutes) > Time);
+    // сколько рабочих дней прошло ПОСЛЕ дня from до дня to включительно.
+    // Запись в пятницу, сегодня среда: пн, вт, ср = 3
+    public static int WorkdaysBetween(DateOnly from, DateOnly to)
+    {
+        var count = 0;
+        for (var d = from.AddDays(1); d <= to; d = d.AddDays(1))
+        {
+            if (IsWorkday(d))
+                count++;
+        }
+        return count;
+    }
+
 }

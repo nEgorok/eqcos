@@ -120,6 +120,7 @@ public class ClosuresController : ControllerBase
         foreach (var b in inside.Where(b => adminOnly.Contains(b.PurposeId)))
         {
             b.Status = BookingStatus.SystemCancelled;
+            b.Note = "Закрыто время";
             summons.Add($"{b.StudentName} ({b.Time:HH:mm})");
             Notify(b.StudentId, null,
                 $"Вызов на {b.Date:dd.MM} {b.Time:HH:mm} отменён: учебная часть в это время не принимает. " +
@@ -143,6 +144,7 @@ public class ClosuresController : ControllerBase
             if (place != null)
             {
                 b.Date = place.Value.Date;
+                b.Moved = true;   // перенесла система
                 b.Time = place.Value.Time;
                 moved++;
                 Notify(b.StudentId, b.Id,
@@ -152,6 +154,7 @@ public class ClosuresController : ControllerBase
             else
             {
                 b.Status = BookingStatus.SystemCancelled;
+                b.Note = "Закрыто время, переносить некуда";
                 cancelled++;
                 Notify(b.StudentId, null,
                     $"Ваша запись на {oldDate:dd.MM} {oldTime:HH:mm} отменена: учебная часть не принимает, " +

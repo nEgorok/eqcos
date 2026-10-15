@@ -1,0 +1,40 @@
+﻿@inject HttpClient Http
+
+@* кнопка «Удалить» → поле причины с подсказками → «Удалить» / «Отмена» *@
+@if (!asking)
+{
+    <button class="btn btn-sm btn-outline-danger" @onclick="() => asking = true">Удалить</button>
+}
+else
+{
+    <div class="d-flex gap-1 align-items-center">
+        <input class="form-control form-control-sm" style="min-width:200px"
+               list="delete-reasons" placeholder="Причина (можно пусто)" @bind="reason" />
+        <button class="btn btn-sm btn-danger" @onclick="Confirm">Удалить</button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="() => asking = false">Отмена</button>
+    </div>
+
+    @* подсказки: можно выбрать или написать свою *@
+    <datalist id="delete-reasons">
+        <option value="Неверный корпус"></option>
+        <option value="Неверная цель визита"></option>
+        <option value="Студент попросил отменить"></option>
+        <option value="Учебная часть в это время не принимает"></option>
+    </datalist>
+}
+
+@code {
+    [Parameter] public int BookingId { get; set; }
+    [Parameter] public EventCallback<string> OnDone { get; set; }   // сообщить странице ответ сервера
+
+    private bool asking;   // показываем поле причины
+    private string reason = "";
+
+    private async Task Confirm()
+    {
+        var resp = await Http.PostAsJsonAsync($"api/admin/bookings/{BookingId}/delete", new { reason });
+        asking = false;
+        reason = "";
+        await OnDone.InvokeAsync(await resp.Content.ReadAsStringAsync());
+    }
+}

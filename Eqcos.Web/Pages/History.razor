@@ -1,0 +1,149 @@
+﻿@page "/admin/history"
+@inject HttpClient Http
+@inject AuthService Auth
+
+<PageTitle>История записей</PageTitle>
+<h1>История записей</h1>
+
+@if (Auth.Role != "Admin")
+{
+    <p>Нет доступа. Войдите как администратор.</p>
+}
+else
+{
+    @* ---- Фильтры ---- *@
+    <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+        <div>
+            <label class="form-label mb-0 small">С</label>
+            <input type="date" class="form-control" @bind="from" />
+        </div>
+        <div>
+            <label class="form-label mb-0 small">По</label>
+            <input type="date" class="form-control" @bind="to" />
+        </div>
+        <div style="min-width:240px">
+            <label class="form-label mb-0 small">ФИО или группа</label>
+            <input class="form-control" placeholder="Например: Тестов или 348" @bind="search" />
+        </div>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="showCancelled" @bind="showCancelled" />
+            <label class="form-check-label" for="showCancelled">Показать отмены студентов</label>
+        </div>
+        <button class="btn btn-primary" @onclick="Load">Показать</button>
+    </div>
+
+    @if (message != null)
+    {
+        <div class="eq-toast">@message</div>
+    }
+
+    @if (rows == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (rows.Count == 0)
+    {
+        <p>Записей нет</p>
+    }
+    else
+    {
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Время</th>
+                    <th>ФИО</th>
+                    <th>Группа</th>
+                    <th>Цель</th>
+                    <th>Итог</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in rows)
+                {
+                    <tr @key="b.Id">
+                        <td>@b.Date.ToString("dd.MM.yy")</td>
+                        <td>@b.Time.ToString("HH:mm")</td>
+                        <td>@b.StudentName <span class="text-muted small">@b.Login</span></td>
+                        <td>@b.Group</td>
+                        <td>@(b.IsSummon ? "Вызов: " : "")@b.Purpose</td>
+                        <td>@BookingText.Status(b)</td>
+                        <td>
+                            <div class="d-flex gap-1 flex-wrap justify-content-end">
+                                @if (b.CanCame)
+                                {
+                                    <button class="btn btn-sm btn-success" @onclick='() => Mark(b.Id, "Came")'>Пришёл</button>
+                                }
+                                @if (b.CanNoShow)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick='() => Mark(b.Id, "NoShow")'>Не пришёл</button>
+                                }
+                                @if (b.CanDelete)
+                                {
+                                    <DeleteBookingButton BookingId="b.Id" OnDone="Done" />
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (rows.Count == 500)
+        {
+            <p class="text-muted small">Показаны первые 500 записей. Сузьте период.</p>
+        }
+    }
+}
+
+@code {
+    private List<AdminBookingDto>? rows;
+    private string? message;
+
+    // по умолчанию: неделя назад … две недели вперёд
+    private DateOnly from = DateOnly.FromDateTime(DateTime.Today).AddDays(-7);
+    private DateOnly to = DateOnly.FromDateTime(DateTime.Today).AddDays(14);
+    private string search = "";
+    private bool showCancelled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.Role == "Admin")
+            await Load();
+    }
+
+    private async Task Load()
+    {
+        var url = $"api/admin/history?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}" +
+                  $"&showCancelled={showCancelled}&search={Uri.EscapeDataString(search)}";
+        rows = await Http.GetFromJsonAsync<List<AdminBookingDto>>(url);
+    }
+
+    private async Task Mark(int id, string status)
+    {
+        var resp = await Http.PostAsJsonAsync($"api/admin/bookings/{id}/mark", new { status });
+        await Done(await resp.Content.ReadAsStringAsync());
+    }
+
+    private async Task Done(string text)
+    {
+        Say(text);
+        await Load();
+    }
+
+    private void Say(string text)
+    {
+        message = text;
+        _ = HideLater(text);
+    }
+
+    private async Task HideLater(string text)
+    {
+        await Task.Delay(5000);
+        if (message == text)
+        {
+            message = null;
+            StateHasChanged();
+        }
+    }
+}

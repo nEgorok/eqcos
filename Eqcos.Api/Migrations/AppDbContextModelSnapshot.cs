@@ -40,6 +40,12 @@ namespace Eqcos.Api.Migrations
                     b.Property<int>("Minutes")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("Moved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
                     b.Property<int>("OfficeId")
                         .HasColumnType("integer");
 

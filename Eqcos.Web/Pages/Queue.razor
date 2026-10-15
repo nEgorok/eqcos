@@ -1,0 +1,166 @@
+﻿@page "/admin"
+@inject HttpClient Http
+@inject AuthService Auth
+@implements IDisposable
+
+<PageTitle>Живая очередь</PageTitle>
+<h1>Живая очередь</h1>
+
+@if (Auth.Role != "Admin")
+{
+    <p>Нет доступа. Войдите как администратор.</p>
+}
+else if (queue == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <p class="text-muted">@queue.Office · @queue.Today.ToString("dd.MM.yyyy"), сейчас @queue.Now.ToString("HH:mm")</p>
+
+    @if (message != null)
+    {
+        <div class="eq-toast">@message</div>
+    }
+
+    @if (queue.Items.Count == 0)
+    {
+        <p>@(IsWeekend(queue.Today) ? "Сегодня выходной." : "На сегодня записей нет.")</p>
+    }
+    else
+    {
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Время</th>
+                    <th>ФИО</th>
+                    <th>Группа</th>
+                    <th>Цель</th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in queue.Items)
+                {
+                    var state = State(b);
+                    <tr @key="b.Id" class="@(state == "Сейчас" ? "table-primary" : "")">
+                        <td>@b.Time.ToString("HH:mm")–@b.End.ToString("HH:mm")</td>
+                        <td>@b.StudentName <span class="text-muted small">@b.Login</span></td>
+                        <td>@b.Group</td>
+                        <td>@(b.IsSummon ? "Вызов: " : "")@b.Purpose</td>
+                        <td>
+                            @if (state != "")
+                            {
+                                <span class="badge @(state == "Время прошло" ? "bg-danger" : state == "Сейчас" ? "bg-primary" : "bg-secondary")">@state</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1 flex-wrap justify-content-end">
+                                @if (b.CanCame)
+                                {
+                                    <button class="btn btn-sm btn-success" @onclick='() => Mark(b.Id, "Came")'>Пришёл</button>
+                                }
+                                @* «Не пришёл» видно всегда, но до конца приёма кнопка неактивна *@
+                                <button class="btn btn-sm btn-outline-danger" disabled="@(!b.CanNoShow)"
+                                        title="@(b.CanNoShow ? "" : "Можно после окончания записи")"
+                                        @onclick='() => Mark(b.Id, "NoShow")'>
+                                    Не пришёл
+                                </button>
+                                @if (b.CanDelete)
+                                {
+                                    <DeleteBookingButton BookingId="b.Id" OnDone="Done" />
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private record QueueDto(string Office, DateOnly Today, TimeOnly Now, List<AdminBookingDto> Items);
+
+    private QueueDto? queue;
+    private string? message;
+    private System.Threading.Timer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.Role != "Admin")
+            return;
+
+        await Load();
+
+        // раз в 5 секунд тихо обновлять
+        timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                try
+                {
+                    await Load();
+                    StateHasChanged();
+                }
+                catch (HttpRequestException)
+                {
+                    // нет связи или вход истёк — шапка уже показала; попробуем через 5 секунд
+                }
+            });
+        }, null, 5000, 5000);
+    }
+
+    public void Dispose() => timer?.Dispose();
+
+    private async Task Load()
+    {
+        queue = await Http.GetFromJsonAsync<QueueDto>("api/admin/queue");
+    }
+
+    // что сейчас с записью: идёт, следующая или время уже прошло
+    private string State(AdminBookingDto b)
+    {
+        var now = queue!.Now;
+        if (now >= b.End)
+            return "Время прошло";
+        if (now >= b.Time)
+            return "Сейчас";
+        var next = queue.Items.FirstOrDefault(x => x.Time > now);   // первая ещё не начавшаяся
+        return next?.Id == b.Id ? "Следующий" : "";
+    }
+
+    private async Task Mark(int id, string status)
+    {
+        var resp = await Http.PostAsJsonAsync($"api/admin/bookings/{id}/mark", new { status });
+        await Done(await resp.Content.ReadAsStringAsync());
+    }
+
+    // ответ сервера → всплывашка, список обновить
+    private async Task Done(string text)
+    {
+        Say(text);
+        await Load();
+    }
+
+    private static bool IsWeekend(DateOnly d) =>
+        d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday;
+
+    // показать сообщение и убрать через 5 секунд
+    private void Say(string text)
+    {
+        message = text;
+        _ = HideLater(text);
+    }
+
+    private async Task HideLater(string text)
+    {
+        await Task.Delay(5000);
+        if (message == text)
+        {
+            message = null;
+            StateHasChanged();
+        }
+    }
+}
