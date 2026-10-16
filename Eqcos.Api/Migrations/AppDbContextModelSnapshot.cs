@@ -58,6 +58,9 @@ namespace Eqcos.Api.Migrations
                     b.Property<int>("PurposeId")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("Resolved")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");

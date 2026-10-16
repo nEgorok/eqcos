@@ -16,6 +16,7 @@ public class Booking
     public string? Note { get; set; }   // причина: почему удалил админ или отменила система
     public string? FirstMark { get; set; }       // отметка до исправления (Came или NoShow); null — не исправляли
     public DateTime? CorrectedAt { get; set; }   // когда исправили отметку (UTC)
+    public bool Resolved { get; set; }   // вызов, отменённый системой, уже разобран: назначен заново или «не нужно»
 }
 
 // возможные состояния записи. Запись больше не удаляется из базы — у неё меняется статус,

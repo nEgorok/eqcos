@@ -5,6 +5,14 @@
 <PageTitle>Заявки</PageTitle>
 <h1>Заявки на подтверждение</h1>
 
+@* подсказки причины отказа: можно выбрать или написать свою *@
+<datalist id="reject-reasons">
+    <option value="Неверный номер студенческого"></option>
+    <option value="ФИО написано с ошибкой"></option>
+    <option value="Неверная группа"></option>
+    <option value="Такого студента нет в списках"></option>
+</datalist>
+
 @if (Auth.Role != "Admin")
 {
     <p>Нет доступа. Войдите как администратор.</p>
@@ -64,7 +72,7 @@ else
                             <div class="d-flex gap-2">
                                 <button class="btn btn-sm btn-success" @onclick="() => Approve(s.Id)">Подтвердить</button>
                                 <input class="form-control form-control-sm" style="max-width:220px"
-                                       placeholder="Причина отказа" @bind="reasons[s.Id]" />
+                                      list="reject-reasons" placeholder="Причина отказа" @bind="reasons[s.Id]" />
                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => Reject(s.Id)">Отклонить</button>
                             </div>
                         </td>

@@ -14,8 +14,6 @@ public record CloseRequest(DateOnly Date, TimeOnly Start, TimeOnly End, string R
 [Route("api/closures")]
 public class ClosuresController : ControllerBase
 {
-    private const int DaysAhead = 14;   // сколько дней вперёд искать место для переноса
-
     private readonly AppDbContext _db;
 
     public ClosuresController(AppDbContext db)
@@ -52,6 +50,9 @@ public class ClosuresController : ControllerBase
         if (r.Start >= r.End)
             return BadRequest("Время «с» должно быть раньше, чем «по»");
 
+        if (!Mover.OnGrid(r.Start) || !Mover.OnGrid(r.End))
+            return BadRequest("Время должно быть кратно 5 минутам, например 10:05 или 10:10");
+
         var reason = string.IsNullOrWhiteSpace(r.Reason) ? "Приёма нет" : r.Reason.Trim();
 
         // всё закрытие — одна транзакция: или всё перенеслось, или ничего не поменялось
@@ -77,7 +78,7 @@ public class ClosuresController : ControllerBase
         if (cancelled > 0)
             text += $". Отменено (некуда перенести): {cancelled}";
         if (summons.Count > 0)
-            text += $". Отменены вызовы, назначьте их заново: {string.Join(", ", summons)}";
+            text += $". Отменены вызовы (они в списке «Нужно перенести» на вкладке «Вызов»): {string.Join(", ", summons)}";
         if (moved + cancelled + summons.Count > 0)
             text += ". Студенты увидят уведомление.";
 
@@ -101,13 +102,14 @@ public class ClosuresController : ControllerBase
     // ---------- ПЕРЕНОС ----------
 
     // убирает записи из закрытого времени.
-    // Записи студентов переносятся в порядке очереди, вызовы отменяются (их админ назначает заново).
+    // Записи студентов переносятся в порядке очереди (Mover), вызовы отменяются — они попадут
+    // в список «Нужно перенести» на вкладке «Вызов».
     // Возвращает: сколько перенесли, сколько отменили, кого из вызванных надо вызвать заново.
     private (int Moved, int Cancelled, List<string> Summons) MoveDisplaced(Office office, DateOnly date, TimeOnly start, TimeOnly end)
     {
         var adminOnly = _db.Purposes.Where(p => p.AdminOnly).Select(p => p.Id).ToList();
 
-        // действующие записи, которые задевают закрытое время, по порядку очереди
+        // действующие записи, которые задевают закрытое время
         var inside = _db.Bookings
             .Where(b => b.OfficeId == office.Id && b.Date == date && b.Status == BookingStatus.Active)
             .ToList()
@@ -122,7 +124,7 @@ public class ClosuresController : ControllerBase
             b.Status = BookingStatus.SystemCancelled;
             b.Note = "Закрыто время";
             summons.Add($"{b.StudentName} ({b.Time:HH:mm})");
-            Notify(b.StudentId, null,
+            Mover.Notify(_db, b.StudentId, null,
                 $"Вызов на {b.Date:dd.MM} {b.Time:HH:mm} отменён: учебная часть в это время не принимает. " +
                 "Учебная часть назначит новое время.");
         }
@@ -130,79 +132,9 @@ public class ClosuresController : ControllerBase
 
         // 2) записи студентов — перенести на ближайшее свободное время
         var students = inside.Where(b => !adminOnly.Contains(b.PurposeId)).ToList();
-        var waiting = students.Select(b => b.Id).ToHashSet();   // ещё не перенесённые: при поиске их не считаем
-
-        int moved = 0, cancelled = 0;
-        foreach (var b in students)
-        {
-            var oldDate = b.Date;
-            var oldTime = b.Time;
-
-            var place = FindPlace(office, date, end, b.Minutes, waiting);
-            waiting.Remove(b.Id);
-
-            if (place != null)
-            {
-                b.Date = place.Value.Date;
-                b.Moved = true;   // перенесла система
-                b.Time = place.Value.Time;
-                moved++;
-                Notify(b.StudentId, b.Id,
-                    $"Ваша запись перенесена с {oldDate:dd.MM} {oldTime:HH:mm} на {b.Date:dd.MM} {b.Time:HH:mm} " +
-                    "(учебная часть в это время не принимает).");
-            }
-            else
-            {
-                b.Status = BookingStatus.SystemCancelled;
-                b.Note = "Закрыто время, переносить некуда";
-                cancelled++;
-                Notify(b.StudentId, null,
-                    $"Ваша запись на {oldDate:dd.MM} {oldTime:HH:mm} отменена: учебная часть не принимает, " +
-                    "свободного времени для переноса нет. Запишитесь заново.");
-            }
-            _db.SaveChanges();   // внутри транзакции: следующий поиск уже видит это место занятым
-        }
+        var (moved, cancelled) = Mover.MoveStudents(_db, office, date, end, students,
+            "учебная часть в это время не принимает", "Закрыто время, переносить некуда");
 
         return (moved, cancelled, summons);
-    }
-
-    // ближайшее свободное место длиной len: сначала в этот день после "after", потом в следующие рабочие дни
-    private (DateOnly Date, TimeOnly Time)? FindPlace(Office office, DateOnly date, TimeOnly after, int len, ICollection<int> except)
-    {
-        for (var d = date; d <= date.AddDays(DaysAhead); d = d.AddDays(1))
-        {
-            if (!Clock.IsWorkday(d))
-                continue;   // суббота и воскресенье
-
-            if (d != date)
-                LockDay(_db, office.Id, d);   // пока ищем место в этот день, туда никто не запишется
-
-            var busy = Busy(_db, office.Id, d, except);
-
-            foreach (var t in GetSlots(office))
-            {
-                if (d == date && t < after)
-                    continue;   // в тот же день — только после закрытия
-
-                if (d == Clock.Today && t <= Clock.Time)
-                    continue;   // прошедшее время сегодня не предлагаем
-
-                if (Fits(office, t, len) && !Overlaps(busy, t, t.AddMinutes(len)))
-                    return (d, t);
-            }
-        }
-        return null;   // за 2 недели места нет
-    }
-
-    // создать уведомление студенту
-    private void Notify(int userId, int? bookingId, string text)
-    {
-        _db.Notifications.Add(new Notification
-        {
-            UserId = userId,
-            BookingId = bookingId,
-            Text = text,
-            CreatedAt = DateTime.UtcNow   // PostgreSQL хранит время с поясом только в UTC
-        });
     }
 }

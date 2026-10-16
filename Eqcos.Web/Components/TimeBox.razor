@@ -1,0 +1,38 @@
+﻿@* поле времени с подсказками: печатаешь «14» — браузер предлагает 14:00 … 14:55.
+   Понимает «14», «1415», «14.15» и «14:15». *@
+<input class="form-control @(bad ? "is-invalid" : "")" style="max-width:110px"
+       list="eq-times" placeholder="чч:мм"
+       value="@Value.ToString("HH:mm")" @onchange="Changed" />
+
+<datalist id="eq-times">
+    @foreach (var t in Times)
+    {
+        <option value="@t"></option>
+    }
+</datalist>
+
+@code {
+    // Value + ValueChanged — пара для @bind-Value="closeStart"
+    [Parameter] public TimeOnly Value { get; set; }
+    [Parameter] public EventCallback<TimeOnly> ValueChanged { get; set; }
+
+    private bool bad;   // ввели что-то непонятное — красная рамка
+
+    // подсказки: 08:00, 08:05 … 17:00 (109 штук)
+    private static readonly List<string> Times = Enumerable.Range(0, 109)
+        .Select(i => new TimeOnly(8, 0).AddMinutes(i * 5).ToString("HH:mm"))
+        .ToList();
+
+    private async Task Changed(ChangeEventArgs e)
+    {
+        var text = (e.Value?.ToString() ?? "").Trim().Replace('.', ':').Replace(',', ':');
+
+        // без двоеточия: «14» → «14:00», «1415» → «14:15»
+        if (text != "" && !text.Contains(':'))
+            text = text.Length <= 2 ? text + ":00" : text.Insert(text.Length - 2, ":");
+
+        bad = !TimeOnly.TryParse(text, out var t);
+        if (!bad)
+            await ValueChanged.InvokeAsync(t);
+    }
+}

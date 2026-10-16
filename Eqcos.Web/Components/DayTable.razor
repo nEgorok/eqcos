@@ -1,0 +1,38 @@
+﻿@* записи на выбранный день: видно, кого заденет вызов или закрытие *@
+<h5 class="mt-4">Записи на день</h5>
+@if (Items == null)
+{
+    <p>Загрузка...</p>
+}
+else if (Items.Count == 0)
+{
+    <p class="text-muted">На этот день записей нет</p>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Время</th>
+                <th>ФИО</th>
+                <th>Группа</th>
+                <th>Цель</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var b in Items)
+            {
+                <tr @key="b.Id">
+                    <td>@b.Time.ToString("HH:mm")–@b.End.ToString("HH:mm")</td>
+                    <td>@b.StudentName <span class="text-muted small">@b.Login</span></td>
+                    <td>@b.Group</td>
+                    <td>@(b.IsSummon ? "Вызов: " : "")@b.Purpose</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public List<AdminBookingDto>? Items { get; set; }
+}

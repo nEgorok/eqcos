@@ -12,7 +12,8 @@ namespace Eqcos.Api.Controllers;
 public record BookRequest(int OfficeId, DateOnly Date, TimeOnly Time, int PurposeId);
 
 // админ присылает: номер студенческого, день, время (корпус берём из его пропуска)
-public record SummonRequest(string StudentLogin, DateOnly Date, TimeOnly Time);
+// Confirm = true — админ уже согласился перенести записи студентов с этого времени
+public record SummonRequest(string StudentLogin, DateOnly Date, TimeOnly Time, bool Confirm);
 
 // одна запись студента для главной страницы
 public record MyBooking(int Id, string Text, bool CanCancel);
@@ -173,27 +174,9 @@ public class SlotsController : ControllerBase
 
     // ---------- АДМИН ----------
 
-    // действующие записи СВОЕГО корпуса на день
-    [Authorize(Roles = "Admin")]
-    [HttpGet("slots/bookings")]
-    public IActionResult GetBookings(DateOnly date)
-    {
-        var list = _db.Bookings
-            .Where(b => b.OfficeId == CurrentOfficeId && b.Date == date && b.Status == BookingStatus.Active)
-            .OrderBy(b => b.Time)
-            .ToList();
-
-        return Ok(list.Select(b => new
-        {
-            b.Id,
-            b.Time,
-            b.StudentName,
-            b.Group,
-            Purpose = PurposeName(b.PurposeId)
-        }));
-    }
-
-    // поставить студенту вызов на профбеседу
+    // поставить студенту вызов на профбеседу.
+    // Если на это время записаны студенты — их записи переносятся по порядку очереди,
+    // но сначала сервер спрашивает админа (ответ 409 Conflict с вопросом).
     [Authorize(Roles = "Admin")]
     [HttpPost("slots/summon")]
     public IActionResult Summon(SummonRequest r)
@@ -202,7 +185,8 @@ public class SlotsController : ControllerBase
         if (office == null)
             return BadRequest("У учётной записи не указан корпус");
 
-        var student = _db.Users.FirstOrDefault(u => u.Login == r.StudentLogin && u.Role == "Student");
+        var login = r.StudentLogin.Trim();
+        var student = _db.Users.FirstOrDefault(u => u.Login == login && u.Role == "Student");
         if (student == null)
             return BadRequest("Студент с таким номером не найден");
 
@@ -212,15 +196,39 @@ public class SlotsController : ControllerBase
         if (dateError != null)
             return BadRequest(dateError);
 
+        if (!Mover.OnGrid(r.Time))
+            return BadRequest("Время должно быть кратно 5 минутам, например 14:05 или 14:10");
+
         if (!Fits(office, r.Time, purpose.Minutes))
             return BadRequest($"{purpose.Minutes} минут с {r.Time:HH:mm} не помещаются в рабочее время");
+
+        var end = r.Time.AddMinutes(purpose.Minutes);
 
         using var tx = _db.Database.BeginTransaction();
         LockDay(_db, office.Id, r.Date);
 
-        // перенос записей студентов под вызов сделаем в шаге 22, пока — отказ
-        if (Overlaps(Busy(_db, office.Id, r.Date), r.Time, r.Time.AddMinutes(purpose.Minutes)))
-            return BadRequest("Это время пересекается с другой записью");
+        if (_db.Closures.Any(c => c.OfficeId == office.Id && c.Date == r.Date && c.Start < end && r.Time < c.End))
+            return BadRequest("Это время закрыто");
+
+        var adminOnly = _db.Purposes.Where(p => p.AdminOnly).Select(p => p.Id).ToList();
+
+        // действующие записи, которые задевают время вызова
+        var inside = _db.Bookings
+            .Where(b => b.OfficeId == office.Id && b.Date == r.Date && b.Status == BookingStatus.Active)
+            .ToList()
+            .Where(b => b.Time < end && r.Time < b.Time.AddMinutes(b.Minutes))
+            .ToList();
+
+        if (inside.Any(b => adminOnly.Contains(b.PurposeId)))
+            return BadRequest("На это время уже назначен другой вызов");
+
+        // на этом времени записаны студенты — сначала спросить админа
+        if (inside.Count > 0 && !r.Confirm)
+        {
+            var names = string.Join(", ", inside.OrderBy(b => b.Time).Select(b => $"{b.StudentName} {b.Time:HH:mm}"));
+            return Conflict($"Будет перенесено записей: {inside.Count} ({names}). " +
+                "Они перенесутся на ближайшее свободное время, студенты получат уведомление. Назначить вызов?");
+        }
 
         _db.Bookings.Add(new Booking
         {
@@ -233,23 +241,30 @@ public class SlotsController : ControllerBase
             StudentName = student.FullName,
             Group = student.Group
         });
-        _db.SaveChanges();
+
+        // отменённые системой вызовы этого студента больше не надо переносить — убрать из списка
+        var old = _db.Bookings
+            .Where(b => b.StudentId == student.Id && b.OfficeId == office.Id
+                     && b.Status == BookingStatus.SystemCancelled && !b.Resolved && adminOnly.Contains(b.PurposeId))
+            .ToList();
+        foreach (var b in old)
+            b.Resolved = true;
+
+        Mover.Notify(_db, student.Id, null,
+            $"Вас вызывают в учебную часть ({office.Name}) {r.Date:dd.MM} в {r.Time:HH:mm}. " +
+            $"Цель: {purpose.Name}");
+        _db.SaveChanges();   // вызов уже в базе — при переносе его время считается занятым
+
+        var (moved, cancelled) = Mover.MoveStudents(_db, office, r.Date, end, inside,
+            null, "Вызов, переносить некуда");
         tx.Commit();
-        return Ok($"Вызов назначен: {student.FullName}, {r.Date:dd.MM} в {r.Time:HH:mm}");
-    }
 
-    // удалить запись своего корпуса (в том числе вызов)
-    [Authorize(Roles = "Admin")]
-    [HttpDelete("slots/bookings/{id}")]
-    public IActionResult DeleteBooking(int id)
-    {
-        var b = _db.Bookings.Find(id);
-        if (b == null || b.OfficeId != CurrentOfficeId || b.Status != BookingStatus.Active)
-            return NotFound("Запись не найдена");
-
-        b.Status = BookingStatus.AdminDeleted;
-        _db.SaveChanges();
-        return Ok($"Запись {b.StudentName} на {b.Date:dd.MM} в {b.Time:HH:mm} удалена");
+        var text = $"Вызов назначен: {student.FullName}, {r.Date:dd.MM} в {r.Time:HH:mm}. Студент получит уведомление";
+        if (moved > 0)
+            text += $". Перенесено записей: {moved}";
+        if (cancelled > 0)
+            text += $". Отменено (некуда перенести): {cancelled}";
+        return Ok(text);
     }
 
     // ---------- ПОМОЩНИКИ ----------

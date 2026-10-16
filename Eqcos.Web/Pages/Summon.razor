@@ -1,0 +1,201 @@
+﻿@page "/admin/summon"
+@inject HttpClient Http
+@inject AuthService Auth
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Вызов</PageTitle>
+<h1>Вызов</h1>
+
+@if (Auth.Role != "Admin")
+{
+    <p>Нет доступа. Войдите как администратор.</p>
+}
+else
+{
+    @* ---- Нужно перенести: вызовы, которые отменились из-за закрытия времени ---- *@
+    @if (resummon != null && resummon.Count > 0)
+    {
+        <div class="alert alert-warning" style="max-width:760px">
+            <b>Нужно перенести.</b> 
+            @foreach (var b in resummon)
+            {
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 border-top mt-2 pt-2">
+                    <span>
+                        @b.StudentName <span class="text-muted small">@b.Login</span>,
+                        было @b.Date.ToString("dd.MM") в @b.Time.ToString("HH:mm")
+                    </span>
+                    <span class="d-flex gap-1">
+                        <button class="btn btn-sm btn-primary" @onclick="() => summonLogin = b.Login">Назначить</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Resolve(b.Id)">Не нужно</button>
+                    </span>
+                </div>
+            }
+        </div>
+    }
+
+    @* ---- Назначить вызов ---- *@
+    <div class="card mb-3" style="max-width:760px">
+        <div class="card-body">
+            <h5 class="card-title">Вызов на профбеседу (30 минут)</h5>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <input type="date" class="form-control" style="max-width:170px"
+                       value="@date.ToString("yyyy-MM-dd")" @onchange="DateChanged" />
+                <TimeBox @bind-Value="summonTime" />
+                <input class="form-control" style="max-width:260px" list="eq-students"
+                       placeholder="Номер или фамилия"
+                       @bind="summonLogin" @bind:event="oninput" @bind:after="StudentTyped" />
+                <button class="btn btn-warning" @onclick="() => DoSummon(false)">Вызвать</button>
+            </div>
+
+            @* подсказки студентов: в поле попадает номер, рядом видно ФИО и группу *@
+            <datalist id="eq-students">
+                @foreach (var s in hints)
+                {
+                    <option value="@s.Login">@s.FullName, @s.Group</option>
+                }
+            </datalist>
+
+            
+        </div>
+    </div>
+
+    @if (message != null)
+    {
+        <div class="eq-toast">@message</div>
+    }
+
+    <DayTable Items="bookings" />
+}
+
+@code {
+    private record StudentHintDto(string Login, string FullName, string Group);
+
+    private DateOnly date = DateOnly.FromDateTime(DateTime.Now);
+    private TimeOnly summonTime = new TimeOnly(14, 0);
+    private string summonLogin = "";
+
+    private List<AdminBookingDto>? bookings;   // записи на выбранный день
+    private List<AdminBookingDto>? resummon;   // «Нужно перенести»
+    private List<StudentHintDto> hints = new();
+    private string? message;
+
+    private CancellationTokenSource? hintDelay;   // чтобы не искать студентов на каждую букву
+    private System.Threading.Timer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.Role != "Admin")
+            return;
+
+        await Load();
+        // раз в 5 секунд тихо обновлять
+        timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                try
+                {
+                    await Load();
+                    StateHasChanged();
+                }
+                catch (HttpRequestException)
+                {
+                    // нет связи — шапка уже показала плашку; попробуем через 5 секунд
+                }
+            });
+        }, null, 5000, 5000);
+    }
+
+    // ушли со страницы — остановить таймер
+    public void Dispose() => timer?.Dispose();
+
+    private async Task Load()
+    {
+        bookings = await Http.GetFromJsonAsync<List<AdminBookingDto>>($"api/admin/day?date={date:yyyy-MM-dd}");
+        resummon = await Http.GetFromJsonAsync<List<AdminBookingDto>>("api/admin/resummon");
+    }
+
+    private async Task DateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            date = d;
+            await Load();
+        }
+    }
+
+    // подсказки студентов: ждём 0,3 секунды после последней буквы
+    private async Task StudentTyped()
+    {
+        hintDelay?.Cancel();
+        hintDelay = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(300, hintDelay.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        hints = await Http.GetFromJsonAsync<List<StudentHintDto>>(
+            $"api/admin/students?q={Uri.EscapeDataString(summonLogin)}") ?? new();
+    }
+
+    // confirm = true — админ уже согласился перенести записи студентов
+    private async Task DoSummon(bool confirm)
+    {
+        if (summonLogin.Trim() == "")
+        {
+            Say("Введите номер студенческого");
+            return;
+        }
+
+        var resp = await Http.PostAsJsonAsync("api/slots/summon", new
+        {
+            studentLogin = summonLogin,
+            date = date.ToString("yyyy-MM-dd"),
+            time = summonTime.ToString("HH:mm:ss"),
+            confirm
+        });
+        var text = await resp.Content.ReadAsStringAsync();
+
+        // 409: на это время записаны студенты — сервер спрашивает, переносить ли их
+        if (resp.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            if (await JS.InvokeAsync<bool>("confirm", text))
+                await DoSummon(true);
+            return;
+        }
+
+        Say(text);
+        if (resp.IsSuccessStatusCode)
+            summonLogin = "";
+        await Load();
+    }
+
+    // «Не нужно» — убрать вызов из списка «Нужно перенести»
+    private async Task Resolve(int id)
+    {
+        var resp = await Http.PostAsync($"api/admin/bookings/{id}/resolve", null);
+        Say(await resp.Content.ReadAsStringAsync());
+        await Load();
+    }
+
+    // показать сообщение и убрать через 5 секунд
+    private void Say(string text)
+    {
+        message = text;
+        _ = HideLater(text);
+    }
+
+    private async Task HideLater(string text)
+    {
+        await Task.Delay(5000);
+        if (message == text)
+        {
+            message = null;
+            StateHasChanged();
+        }
+    }
+}

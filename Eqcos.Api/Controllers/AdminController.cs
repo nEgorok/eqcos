@@ -12,6 +12,9 @@ public record MarkRequest(string Status);
 // админ присылает: причину удаления (можно пустую)
 public record DeleteRequest(string? Reason);
 
+// подсказка в поле «Номер студенческого»
+public record StudentHint(string Login, string FullName, string Group);
+
 // одна строка очереди или истории — всё, что нужно показать, и какие кнопки можно нажать
 public record AdminBooking(
     int Id, DateOnly Date, TimeOnly Time, TimeOnly End,
@@ -85,6 +88,61 @@ public class AdminController : ControllerBase
             .ToList();
 
         return Ok(ToRows(list));
+    }
+
+    // ЗАПИСИ НА ДЕНЬ: для вкладок «Вызов» и «Закрытие» — видно, кого заденет
+    [HttpGet("day")]
+    public IActionResult GetDay(DateOnly date)
+    {
+        var list = _db.Bookings
+            .Where(b => b.OfficeId == CurrentOfficeId && b.Date == date && b.Status == BookingStatus.Active)
+            .OrderBy(b => b.Time).ThenBy(b => b.Id)
+            .ToList();
+        return Ok(ToRows(list));
+    }
+
+    // НУЖНО ПЕРЕНЕСТИ: вызовы, которые отменила система (закрыли время), и их ещё не назначили заново
+    [HttpGet("resummon")]
+    public IActionResult GetResummon()
+    {
+        var adminOnly = _db.Purposes.Where(p => p.AdminOnly).Select(p => p.Id).ToList();
+        var list = _db.Bookings
+            .Where(b => b.OfficeId == CurrentOfficeId && b.Status == BookingStatus.SystemCancelled
+                     && !b.Resolved && adminOnly.Contains(b.PurposeId))
+            .OrderBy(b => b.Date).ThenBy(b => b.Time)
+            .ToList();
+        return Ok(ToRows(list));
+    }
+
+    // «Не нужно»: убрать отменённый вызов из списка «Нужно перенести»
+    [HttpPost("bookings/{id}/resolve")]
+    public IActionResult Resolve(int id)
+    {
+        var b = _db.Bookings.Find(id);
+        if (b == null || b.OfficeId != CurrentOfficeId || b.Status != BookingStatus.SystemCancelled || !IsSummon(b))
+            return NotFound("Вызов не найден");
+
+        b.Resolved = true;
+        _db.SaveChanges();
+        return Ok($"{b.StudentName}: вызов убран из списка");
+    }
+
+    // ПОДСКАЗКИ СТУДЕНТОВ: по началу номера или части ФИО, не больше 10
+    [HttpGet("students")]
+    public IActionResult GetStudents(string? q)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+            return Ok(new List<StudentHint>());   // по одной букве не ищем — слишком много
+
+        var s = q.Trim().ToLower();
+        var list = _db.Users
+            .Where(u => u.Role == "Student" && u.Status == "Approved"
+                     && (u.Login.StartsWith(s) || u.FullName.ToLower().Contains(s)))
+            .OrderBy(u => u.FullName)
+            .Take(10)
+            .Select(u => new StudentHint(u.Login, u.FullName, u.Group))
+            .ToList();
+        return Ok(list);
     }
 
     // ОТМЕТКА: «Пришёл» или «Не пришёл». Исправить ошибочную отметку можно один раз.
