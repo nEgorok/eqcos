@@ -4,7 +4,7 @@
 @inject NavigationManager Nav
 
 <PageTitle>Профиль</PageTitle>
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2" style="max-width:520px">
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3" style="max-width:820px">
     <h1 class="mb-0">Профиль</h1>
     @if (Auth.IsLoggedIn)
     {
@@ -22,104 +22,121 @@ else if (profile == null)
 }
 else
 {
-    @if (message != null)
-    {
-        <div class="alert @(ok ? "alert-success" : "alert-danger")">@message</div>
-    }
-
-    @* ---- Данные ---- *@
-     <div class="card mb-3 mt-3" style="max-width:520px">
-        <div class="card-body eq-enter">
-            <h5 class="card-title">Мои данные</h5>
-
-            @if (profile.Role == "Admin")
+    <div class="eq-profile">
+        @* ---- Разделы слева (на телефоне — сверху) ---- *@
+        <nav class="eq-side">
+            @if (profile.Role == "Student")
             {
-                <p class="mb-1"><b>Учётная запись:</b> @profile.Login</p>
-                <p class="mb-1"><b>Название:</b> @profile.FullName</p>
-                <p class="mb-0"><b>Корпус:</b> @profile.Office</p>
+                <button class="@(tab == "bookings" ? "active" : "")" @onclick='() => Open("bookings")'>Мои записи</button>
             }
-            else
-            {
-                <p class="mb-2"><b>Номер студенческого:</b> @profile.Login</p>
-                <p class="mb-2"><b>Статус:</b> @StatusText(profile.Status)</p>
-                @if (profile.Status == "Rejected")
-                {
-                    <div class="alert alert-danger py-2">Причина: @profile.RejectReason</div>
-                }
-                @if (profile.PendingFullName != null || profile.PendingGroup != null)
-                {
-                    <div class="alert alert-warning py-2">
-                        На проверке изменение: @profile.PendingFullName, группа @profile.PendingGroup.
-                        Пока действуют прежние данные.
-                    </div>
-                }
-                <label class="form-label mb-0">ФИО</label>
-                <input class="form-control mb-2" @bind="editName" />
-                <label class="form-label mb-0">Группа</label>
-                <input class="form-control mb-2" @bind="editGroup" />
-                <button class="btn btn-primary eq-submit" @onclick="SaveData">Сохранить</button>
-            }
-        </div>
-    </div>
+            <button class="@(tab == "data" ? "active" : "")" @onclick='() => Open("data")'>Мои данные</button>
+            <button class="@(tab == "settings" ? "active" : "")" @onclick='() => Open("settings")'>Настройки аккаунта</button>
+        </nav>
 
-    @* ---- Мои записи (студент) ---- *@
-    @if (profile.Role == "Student" && myBookings != null)
-    {
-        <div class="card mb-3" style="max-width:520px">
-            <div class="card-body">
-                <h5 class="card-title">Мои записи</h5>
+        <div class="eq-side-body">
+            @if (message != null)
+            {
+                <div class="alert @(ok ? "alert-success" : "alert-danger")">@message</div>
+            }
+
+            @* ---- Мои записи (студент) ---- *@
+            @if (tab == "bookings" && myBookings != null)
+            {
+                <h5>Мои записи</h5>
                 @if (myBookings.Count == 0)
                 {
-                    <p class="mb-0">Записей нет</p>
+                    <p class="mb-2">Записей нет.</p>
+                    <a class="btn eq-btn eq-btn-blue" href="">Записаться</a>
                 }
                 @foreach (var b in myBookings)
                 {
-                    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
-                        <span>@(b.CanCancel ? "" : "Вызов: ")@b.Text</span>
+                    <div class="eq-row">
+                        <span>
+                            @if (!b.CanCancel)
+                            {
+                                <b>Вызов: </b>
+                            }
+                            @b.Text
+                        </span>
                         @if (b.CanCancel)
                         {
                             <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelBooking(b.Id)">Отменить</button>
                         }
                     </div>
                 }
-            </div>
-        </div>
-    }
+            }
 
-    @* ---- Смена пароля ---- *@
-    <div class="card mb-3" style="max-width:520px">
-             <div class="card-body eq-enter">
-            <h5 class="card-title">Сменить пароль</h5>
-            <PasswordInput Class="mb-2" Placeholder="Старый пароль" @bind-Value="oldPassword" />
-            <PasswordInput Class="mb-2" Placeholder="Новый пароль" @bind-Value="newPassword" />
-            <PasswordInput Class="mb-2" Placeholder="Повторите новый пароль" @bind-Value="repeat" />
-            <button class="btn btn-primary eq-submit" @onclick="ChangePassword">Сменить пароль</button>
+            @* ---- Мои данные ---- *@
+            @if (tab == "data")
+            {
+                <h5>Мои данные</h5>
 
+                @if (profile.Role == "Admin")
+                {
+                    <div class="eq-row"><span class="text-muted">Учётная запись</span><span>@profile.Login</span></div>
+                    <div class="eq-row"><span class="text-muted">Название</span><span>@profile.FullName</span></div>
+                    <div class="eq-row"><span class="text-muted">Корпус</span><span>@profile.Office</span></div>
+                }
+                else
+                {
+                    @if (profile.Status == "Rejected")
+                    {
+                        <div class="alert alert-danger py-2">Учётная запись не подтверждена: @profile.RejectReason. Исправьте данные — они снова уйдут на проверку.</div>
+                    }
+                    @if (profile.PendingFullName != null || profile.PendingGroup != null)
+                    {
+                        <div class="alert alert-warning py-2">
+                            На проверке изменение: @profile.PendingFullName, группа @profile.PendingGroup.
+                            Пока действуют прежние данные.
+                        </div>
+                    }
+
+                    @if (!editing)
+                    {
+                        <div class="eq-row"><span class="text-muted">Номер студенческого</span><span>@profile.Login</span></div>
+                        <div class="eq-row"><span class="text-muted">ФИО</span><span>@profile.FullName</span></div>
+                        <div class="eq-row"><span class="text-muted">Группа</span><span>@profile.Group</span></div>
+                        <div class="eq-row"><span class="text-muted">Корпус</span><span>@(profile.Office ?? "не указан")</span></div>
+                        <div class="eq-row"><span class="text-muted">Статус</span><span>@StatusText(profile.Status)</span></div>
+                        <button class="btn eq-btn eq-btn-blue mt-3" @onclick="StartEdit">Изменить</button>
+                    }
+                    else
+                    {
+                        <div class="eq-enter" style="max-width:420px">
+                            <StudentFields Form="form" />
+                            <div class="d-flex gap-2 mt-2">
+                                <button class="btn btn-primary eq-submit" @onclick="SaveData">Сохранить</button>
+                                <button class="btn btn-outline-secondary" @onclick="() => editing = false">Отмена</button>
+                            </div>
+                        </div>
+                    }
+                }
+            }
+
+            @* ---- Настройки аккаунта ---- *@
+            @if (tab == "settings")
+            {
+                <h5>Сменить пароль</h5>
+                <div class="eq-enter" style="max-width:420px">
+                    <PasswordInput Class="mb-2" Placeholder="Старый пароль" @bind-Value="oldPassword" />
+                    <PasswordInput Class="mb-2" Placeholder="Новый пароль" @bind-Value="newPassword" />
+                    <PasswordInput Class="mb-2" Placeholder="Повторите новый пароль" @bind-Value="repeat" />
+                    <button class="btn btn-primary eq-submit" @onclick="ChangePassword">Сменить пароль</button>
+                </div>
+            }
         </div>
     </div>
-
-    @* ---- Удалить аккаунт (студент) ---- *@
-    @if (profile.Role == "Student")
-    {
-        <div class="card mb-3 border-danger" style="max-width:520px">
-            <div class="card-body">
-                <h5 class="card-title text-danger">Удалить аккаунт</h5>
-                <p class="small text-muted mb-2">Будущие записи будут отменены. Восстановить аккаунт нельзя — только зарегистрироваться заново.</p>
-                <PasswordInput Class="mb-2" Placeholder="Пароль для подтверждения" @bind-Value="deletePassword" />
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="sure" @bind="sure" />
-                    <label class="form-check-label" for="sure">Я понимаю, что аккаунт удалится навсегда</label>
-                </div>
-                <button class="btn btn-danger" disabled="@(!sure)" @onclick="DeleteAccount">Удалить аккаунт</button>
-            </div>
-        </div>
-    }
 }
 
 @code {
-    private record ProfileDto(string Login, string FullName, string Group, string Role, string? Office,
+    // ?tab=data — открыть сразу нужный раздел (ссылка с главной)
+    [SupplyParameterFromQuery] public string? Tab { get; set; }
+
+    private record ProfileDto(string Login, string FullName, string Group, string Role, int? OfficeId, string? Office,
                               string Status, string? RejectReason,
                               string? PendingFullName, string? PendingGroup);
+    private record MyBookingDto(int Id, string Text, bool CanCancel);
+
     // статус по-русски
     private static string StatusText(string s) => s switch
     {
@@ -127,43 +144,55 @@ else
         "Rejected" => "отклонена",
         _ => "на проверке"
     };
-    private record MyBookingDto(int Id, string Text, bool CanCancel);
 
     private ProfileDto? profile;
     private List<MyBookingDto>? myBookings;
 
-    private string editName = "";
-    private string editGroup = "";
+    private string tab = "data";       // открытый раздел: "bookings", "data" или "settings"
+    private bool editing;              // нажали «Изменить»
+    private StudentForm form = new();  // поля для «Изменить»
 
     private string oldPassword = "";
     private string newPassword = "";
     private string repeat = "";
-
-    private string deletePassword = "";
-    private bool sure;   // галочка "я понимаю"
 
     private string? message;
     private bool ok;     // зелёная или красная плашка
 
     protected override async Task OnInitializedAsync()
     {
-        if (Auth.IsLoggedIn)
-            await Load();
+        if (!Auth.IsLoggedIn)
+            return;
+        await Load();
+        // студенту сначала показываем его записи, админу — данные
+        tab = Tab ?? (profile!.Role == "Student" ? "bookings" : "data");
     }
 
     private async Task Load()
     {
         profile = await Http.GetFromJsonAsync<ProfileDto>("api/profile");
-        // если есть заявка на изменение — в полях показываем её, иначе текущие данные
-        editName = profile!.PendingFullName ?? profile.FullName;
-        editGroup = profile.PendingGroup ?? profile.Group;
 
         // админ подтвердил новое ФИО — обновить имя справа сверху без перевхода
-        if (Auth.FullName != profile.FullName)
+        if (Auth.FullName != profile!.FullName)
             await Auth.SetFullName(profile.FullName);
 
         if (profile.Role == "Student")
             myBookings = await Http.GetFromJsonAsync<List<MyBookingDto>>("api/slots/my");
+    }
+
+    private void Open(string to)
+    {
+        tab = to;
+        message = null;
+        editing = false;
+    }
+
+    // «Изменить»: в полях — заявка на проверке, если она есть, иначе текущие данные
+    private void StartEdit()
+    {
+        form.Fill(profile!.PendingFullName ?? profile.FullName, profile.PendingGroup ?? profile.Group);
+        message = null;
+        editing = true;
     }
 
     // показать ответ сервера зелёным или красным
@@ -175,12 +204,19 @@ else
 
     private async Task SaveData()
     {
-        var resp = await Http.PutAsJsonAsync("api/profile", new { fullName = editName, group = editGroup });
-        await Show(resp);
+        var error = form.Check(needOffice: false);
+        if (error != null)
+        {
+            ok = false;
+            message = error;
+            return;
+        }
+
+        await Show(await Http.PutAsJsonAsync("api/profile", form.ToJson()));
         if (ok)
         {
+            editing = false;
             await Load();
-            await Auth.SetFullName(profile!.FullName);   // справа сверху — то ФИО, что реально действует
         }
     }
 
@@ -203,20 +239,11 @@ else
         if (ok)
             oldPassword = newPassword = repeat = "";
     }
-        // «Выйти» — выходим и сразу открываем окно входа
+
+    // «Выйти» — выходим и сразу открываем окно входа
     private async Task Logout()
     {
         await Auth.Logout();
         Nav.NavigateTo("login");
-    }
-    private async Task DeleteAccount()
-    {
-        var resp = await Http.PostAsJsonAsync("api/profile/delete", new { password = deletePassword });
-        await Show(resp);
-        if (ok)
-        {
-            await Auth.Logout();
-            Nav.NavigateTo("/");
-        }
     }
 }

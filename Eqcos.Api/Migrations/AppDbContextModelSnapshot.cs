@@ -109,6 +109,110 @@ namespace Eqcos.Api.Migrations
                     b.ToTable("Closures");
                 });
 
+            modelBuilder.Entity("Eqcos.Api.Models.GroupCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("GroupCodes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Code = "А"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Code = "Б"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Code = "Бп"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Code = "В"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Code = "К"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Code = "Кп"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Code = "Л"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Code = "Лг"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Code = "М"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Code = "Н"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Code = "Нп"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Code = "П"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Code = "Св"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Code = "Тда"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Code = "Тэ"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Code = "Х"
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Code = "Э"
+                        });
+                });
+
             modelBuilder.Entity("Eqcos.Api.Models.Notification", b =>
                 {
                     b.Property<int>("Id")

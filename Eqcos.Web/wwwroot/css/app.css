@@ -475,3 +475,73 @@ h2 {
         background: var(--eq-blue);
         color: #fff;
     }
+/* ===== Профиль: разделы слева, содержимое справа ===== */
+.eq-profile {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    max-width: 820px;
+}
+
+.eq-side {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 210px;
+    background: var(--eq-head);
+    border-radius: 16px;
+    padding: 6px;
+}
+
+    .eq-side button {
+        border: none;
+        background: transparent;
+        border-radius: 12px;
+        padding: 0.6rem 0.9rem;
+        text-align: left;
+        font-weight: 600;
+        color: var(--eq-ink);
+    }
+
+        .eq-side button:hover {
+            background: #fff;
+        }
+
+        .eq-side button.active {
+            background: var(--eq-blue);
+            color: #fff;
+        }
+
+.eq-side-body {
+    flex: 1;
+    min-width: 0; /* длинный текст переносится, а не растягивает страницу */
+}
+
+/* строка «подпись — значение» или «запись — кнопка» */
+.eq-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--eq-line);
+}
+
+/* телефон: разделы сверху в одну строку */
+@media (max-width: 640px) {
+    .eq-profile {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .eq-side {
+        flex-direction: row;
+        overflow-x: auto;
+        width: 100%;
+        min-width: 0;
+    }
+
+        .eq-side button {
+            white-space: nowrap;
+        }
+}

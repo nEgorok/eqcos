@@ -136,7 +136,7 @@ public class AdminController : ControllerBase
 
         var s = q.Trim().ToLower();
         var list = _db.Users
-            .Where(u => u.Role == "Student" && u.Status == "Approved"
+                        .Where(u => u.Role == "Student" && u.Status == "Approved" && u.OfficeId == CurrentOfficeId
                      && (u.Login.StartsWith(s) || u.FullName.ToLower().Contains(s)))
             .OrderBy(u => u.FullName)
             .Take(10)

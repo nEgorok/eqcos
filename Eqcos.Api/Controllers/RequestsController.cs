@@ -23,7 +23,16 @@ public class RequestsController : ControllerBase
         _db = db;
     }
 
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+    // корпус админа из пропуска: он видит заявки только своего корпуса
+    private int? CurrentOfficeId =>
+        int.TryParse(User.FindFirst("office")?.Value, out var id) ? id : null;
+
+    // студент своего корпуса (или null, если такого нет)
+    private User? FindStudent(int id)
+    {
+        var u = _db.Users.Find(id);
+        return u != null && u.Role == "Student" && u.OfficeId == CurrentOfficeId ? u : null;
+    }
 
     // заявка на изменение = есть новое ФИО или группа "в стороне"
     private static bool HasChange(User u) => u.PendingFullName != null || u.PendingGroup != null;
@@ -34,12 +43,12 @@ public class RequestsController : ControllerBase
 
     private const string Changed = "Студент только что изменил данные. Обновите список и проверьте заново.";
 
-    // все заявки (сначала самые ранние)
+    // все заявки своего корпуса (сначала самые ранние)
     [HttpGet]
     public IActionResult GetPending()
     {
         var users = _db.Users
-            .Where(u => u.Role == "Student" &&
+            .Where(u => u.Role == "Student" && u.OfficeId == CurrentOfficeId &&
                         (u.Status == "Pending" || u.PendingFullName != null || u.PendingGroup != null))
             .OrderBy(u => u.Id)
             .ToList();
@@ -60,8 +69,8 @@ public class RequestsController : ControllerBase
     [HttpPost("{id}/approve")]
     public IActionResult Approve(int id, ApproveRequest r)
     {
-        var u = _db.Users.Find(id);
-        if (u == null || u.Role != "Student")
+        var u = FindStudent(id);
+        if (u == null)
             return NotFound("Студент не найден");
         if (!SameAsSeen(u, r.FullName, r.Group))
             return Conflict(Changed);
@@ -101,8 +110,8 @@ public class RequestsController : ControllerBase
         if (reason == "")
             return BadRequest("Укажите причину отказа");
 
-        var u = _db.Users.Find(id);
-        if (u == null || u.Role != "Student")
+        var u = FindStudent(id);
+        if (u == null)
             return NotFound("Студент не найден");
         if (!SameAsSeen(u, r.FullName, r.Group))
             return Conflict(Changed);

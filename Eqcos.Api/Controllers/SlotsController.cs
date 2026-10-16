@@ -59,6 +59,13 @@ public class SlotsController : ControllerBase
         return Ok(_db.Purposes.Where(p => !p.AdminOnly).OrderBy(p => p.Id).ToList());
     }
 
+    // буквы групп для выпадающего списка при регистрации и в профиле
+    [HttpGet("groupcodes")]
+    public IActionResult GetGroupCodes()
+    {
+        return Ok(_db.GroupCodes.OrderBy(c => c.Id).ToList());
+    }
+
     // свободные 5-минутные клетки в корпусе на день
     [HttpGet("slots/free")]
     public IActionResult GetFree(int officeId, DateOnly date)
@@ -109,6 +116,12 @@ public class SlotsController : ControllerBase
         var user = _db.Users.Find(CurrentUserId)!;
         if (user.Status != "Approved")
             return BadRequest("Записаться можно после того, как учебная часть подтвердит вашу учётную запись");
+
+        // только в свой корпус (гость видит все, но записаться не может)
+        if (user.OfficeId == null)
+            return BadRequest("У вашей учётной записи не указан корпус. Обратитесь в учебную часть");
+        if (user.OfficeId != r.OfficeId)
+            return BadRequest("Записаться можно только в свой корпус");
 
         // дальше — строго по очереди: сначала этот студент, потом этот корпус в этот день
         using var tx = _db.Database.BeginTransaction();
@@ -186,9 +199,10 @@ public class SlotsController : ControllerBase
             return BadRequest("У учётной записи не указан корпус");
 
         var login = r.StudentLogin.Trim();
-        var student = _db.Users.FirstOrDefault(u => u.Login == login && u.Role == "Student");
+        // вызвать можно только студента своего корпуса
+        var student = _db.Users.FirstOrDefault(u => u.Login == login && u.Role == "Student" && u.OfficeId == office.Id);
         if (student == null)
-            return BadRequest("Студент с таким номером не найден");
+            return BadRequest("Студент с таким номером не найден в вашем корпусе");
 
         var purpose = _db.Purposes.First(p => p.AdminOnly);   // профбеседа
 
@@ -252,7 +266,7 @@ public class SlotsController : ControllerBase
 
         Mover.Notify(_db, student.Id, null,
             $"Вас вызывают в учебную часть ({office.Name}) {r.Date:dd.MM} в {r.Time:HH:mm}. " +
-            $"Цель: {purpose.Name}");
+            $"Цель: {purpose.Name}.");
         _db.SaveChanges();   // вызов уже в базе — при переносе его время считается занятым
 
         var (moved, cancelled) = Mover.MoveStudents(_db, office, r.Date, end, inside,

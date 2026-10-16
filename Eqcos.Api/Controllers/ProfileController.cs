@@ -1,15 +1,13 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Eqcos.Api.Data;
-using Eqcos.Api.Models;
 using Eqcos.Api.Services;
 
 namespace Eqcos.Api.Controllers;
 
-public record ProfileUpdate(string FullName, string Group);
-public record DeleteAccountRequest(string Password);
+// новые данные студента: ФИО тремя полями, группа двумя частями ("204" + "Лг")
+public record ProfileUpdate(string? LastName, string? FirstName, string? MiddleName, string? GroupDigits, string? GroupCode);
 
 [ApiController]
 [Route("api/profile")]
@@ -17,7 +15,6 @@ public record DeleteAccountRequest(string Password);
 public class ProfileController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly PasswordHasher<User> _hasher = new();
 
     public ProfileController(AppDbContext db)
     {
@@ -42,22 +39,32 @@ public class ProfileController : ControllerBase
             u.FullName,
             u.Group,
             u.Role,
-            Office = office,
+            u.OfficeId,        // номер корпуса: на главной студенту показываем только его
+            Office = office,   // название корпуса
             u.Status,
             u.RejectReason,
             u.PendingFullName,
             u.PendingGroup
         });
     }
+
     // СТУДЕНТ: изменить ФИО и группу
     [Authorize(Roles = "Student")]
     [HttpPut]
     public IActionResult Update(ProfileUpdate r)
     {
-        var fullName = r.FullName.Trim();
-        var group = r.Group.Trim();
-        if (fullName == "" || group == "")
-            return BadRequest("ФИО и группа не могут быть пустыми");
+        var last = StudentData.Fix(r.LastName);
+        var first = StudentData.Fix(r.FirstName);
+        var middle = StudentData.Fix(r.MiddleName);
+        var digits = (r.GroupDigits ?? "").Trim();
+        var code = (r.GroupCode ?? "").Trim();
+
+        var error = StudentData.CheckName(last, first, middle) ?? StudentData.CheckGroup(_db, digits, code);
+        if (error != null)
+            return BadRequest(error);
+
+        var fullName = StudentData.JoinName(last, first, middle);
+        var group = digits + code;
 
         var u = _db.Users.Find(CurrentUserId)!;
 
@@ -89,24 +96,5 @@ public class ProfileController : ControllerBase
         return Ok("Данные сохранены и отправлены на проверку в учебную часть");
     }
 
-    // СТУДЕНТ: удалить аккаунт (нужен пароль)
-    [Authorize(Roles = "Student")]
-    [HttpPost("delete")]
-    public IActionResult Delete(DeleteAccountRequest r)
-    {
-        var u = _db.Users.Find(CurrentUserId)!;
-
-        var check = _hasher.VerifyHashedPassword(u, u.PasswordHash, r.Password);
-        if (check == PasswordVerificationResult.Failed)
-            return BadRequest("Неверный пароль");
-
-        // будущие записи освобождаем, уведомления удаляем
-        foreach (var b in _db.Bookings.Where(b => b.StudentId == u.Id && b.Date >= Clock.Today && b.Status == BookingStatus.Active))
-            b.Status = BookingStatus.SystemCancelled;
-        _db.Notifications.RemoveRange(_db.Notifications.Where(n => n.UserId == u.Id));
-        _db.Users.Remove(u);
-        _db.SaveChanges();
-
-        return Ok("Аккаунт удалён");
-    }
+    // удаление аккаунта самим студентом убрано: удаляет только учебная часть
 }

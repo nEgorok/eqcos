@@ -10,7 +10,7 @@
 
 <div class="eq-auth">
     <div class="card eq-auth-card">
-                @* eq-enter: Enter в поле — к следующему полю, в последнем — нажать кнопку eq-submit *@
+        @* eq-enter: Enter в поле — к следующему полю, в последнем — нажать кнопку eq-submit *@
         <div class="card-body eq-enter">
 
             @if (mode == "staff")
@@ -28,9 +28,8 @@
 
             @if (mode == "register")
             {
-                <input class="form-control mb-2" placeholder="ФИО" @bind="fullName" />
-                <input class="form-control mb-2" placeholder="Группа" @bind="group" />
-                <input class="form-control mb-2" placeholder="Номер студенческого" @bind="login" />
+                <StudentFields Form="form" ShowOffice="true" />
+                <input class="form-control mb-2" placeholder="Номер студенческого" inputmode="numeric" @bind="login" />
                 <PasswordInput Class="mb-3" Placeholder="Пароль (не короче 6 символов)" @bind-Value="password" />
                 <button class="btn btn-success w-100 eq-submit" @onclick="DoRegister">Зарегистрироваться</button>
             }
@@ -68,8 +67,7 @@
 @code {
     private string login = "";
     private string password = "";
-    private string fullName = "";
-    private string group = "";
+    private StudentForm form = new();   // ФИО, группа, корпус — их заполняет StudentFields
     private string? error;
     private string? notice;   // «Сессия истекла…» — если нас сюда выкинуло
 
@@ -117,9 +115,12 @@
 
     private async Task DoRegister()
     {
-        if (fullName == "" || group == "" || login == "" || password == "")
+        error = form.Check(needOffice: true);
+        if (error != null)
+            return;
+        if (login == "" || password == "")
         {
-            error = "Заполните все поля";
+            error = "Введите номер студенческого и пароль";
             return;
         }
         if (password.Length < 6)
@@ -128,7 +129,7 @@
             return;
         }
 
-        var resp = await Http.PostAsJsonAsync("api/auth/register", new { login, password, fullName, group });
+        var resp = await Http.PostAsJsonAsync("api/auth/register", form.ToJson(login, password));
         if (!resp.IsSuccessStatusCode)
         {
             error = await resp.Content.ReadAsStringAsync();   // например "уже зарегистрирован"

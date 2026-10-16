@@ -43,7 +43,7 @@ public static class Mover
                 b.Note = noteIfCancelled;
                 cancelled++;
                 Notify(db, b.StudentId, null,
-                    $"Ваша запись на {oldDate:dd.MM} {oldTime:HH:mm} отменена {reason}, " +
+                    $"Ваша запись на {oldDate:dd.MM} {oldTime:HH:mm} отменена{reason}, " +
                     "свободного времени для переноса нет. Запишитесь заново.");
             }
             db.SaveChanges();   // внутри транзакции: следующий поиск уже видит это место занятым

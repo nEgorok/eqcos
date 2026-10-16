@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<Purpose> Purposes { get; set; }
     public DbSet<Closure> Closures { get; set; }
     public DbSet<Notification> Notifications { get; set; }
+    public DbSet<GroupCode> GroupCodes { get; set; }
     // начальные данные: три корпуса сразу попадут в базу при миграции
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -27,6 +28,26 @@ public class AppDbContext : DbContext
             new Purpose { Id = 2, Name = "Направление на исправление оценки", Minutes = 5 },
             new Purpose { Id = 3, Name = "Форма №6", Minutes = 5 },
             new Purpose { Id = 4, Name = "Профилактическая беседа", Minutes = 30, AdminOnly = true }
+        );
+        // буквы групп (админ сможет добавлять свои в «Настройках», шаг 27)
+        mb.Entity<GroupCode>().HasData(
+            new GroupCode { Id = 1, Code = "А" },
+            new GroupCode { Id = 2, Code = "Б" },
+            new GroupCode { Id = 3, Code = "Бп" },
+            new GroupCode { Id = 4, Code = "В" },
+            new GroupCode { Id = 5, Code = "К" },
+            new GroupCode { Id = 6, Code = "Кп" },
+            new GroupCode { Id = 7, Code = "Л" },
+            new GroupCode { Id = 8, Code = "Лг" },
+            new GroupCode { Id = 9, Code = "М" },
+            new GroupCode { Id = 10, Code = "Н" },
+            new GroupCode { Id = 11, Code = "Нп" },
+            new GroupCode { Id = 12, Code = "П" },
+            new GroupCode { Id = 13, Code = "Св" },
+            new GroupCode { Id = 14, Code = "Тда" },
+            new GroupCode { Id = 15, Code = "Тэ" },
+            new GroupCode { Id = 16, Code = "Х" },
+            new GroupCode { Id = 17, Code = "Э" }
         );
     }
 }

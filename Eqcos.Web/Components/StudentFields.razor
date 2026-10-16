@@ -1,0 +1,61 @@
+﻿@inject HttpClient Http
+
+@* поля студента: Фамилия, Имя, Отчество, группа (цифры + буквы из списка), корпус.
+   Использование: <StudentFields Form="form" ShowOffice="true" /> *@
+
+<input class="form-control mb-2" placeholder="Фамилия" @bind="Form.LastName" @bind:after="FixNames" />
+<input class="form-control mb-2" placeholder="Имя" @bind="Form.FirstName" @bind:after="FixNames" />
+<input class="form-control mb-2" placeholder="Отчество (если есть)" @bind="Form.MiddleName" @bind:after="FixNames" />
+
+<div class="d-flex gap-2 mb-1">
+    <input class="form-control" style="max-width:120px" placeholder="Группа" maxlength="3" inputmode="numeric"
+           @bind="Form.GroupDigits" />
+    <EqSelect Class="flex-grow-1" Items="@codeItems" Value="@CodeId" ValueChanged="@PickCode"
+              Placeholder="— буквы группы —" />
+</div>
+<div class="form-text mt-0 mb-2">Например: 204 и Лг</div>
+
+@if (ShowOffice)
+{
+    <EqSelect Class="mb-2" Items="@officeItems" @bind-Value="Form.OfficeId" Placeholder="— корпус —" />
+}
+
+@code {
+    [Parameter] public StudentForm Form { get; set; } = new();
+    [Parameter] public bool ShowOffice { get; set; }   // корпус выбирают только при регистрации
+
+    private record CodeDto(int Id, string Code);
+    private record OfficeDto(int Id, string Name);
+
+    private List<CodeDto> codes = new();
+    private List<SelectItem> codeItems = new();
+    private List<SelectItem> officeItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        codes = (await Http.GetFromJsonAsync<List<CodeDto>>("api/groupcodes"))!;
+        codeItems = codes.Select(c => new SelectItem(c.Id, c.Code)).ToList();
+
+        if (ShowOffice)
+        {
+            var offices = (await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices"))!;
+            officeItems = offices.Select(o => new SelectItem(o.Id, o.Name)).ToList();
+        }
+    }
+
+    // в списке хранятся номера, а в форме — сами буквы: переводим туда и обратно
+    private int CodeId => codes.FirstOrDefault(c => c.Code == Form.GroupCode)?.Id ?? 0;
+
+    private void PickCode(int id)
+    {
+        Form.GroupCode = codes.First(c => c.Id == id).Code;
+    }
+
+    // ушли из поля — сразу исправить регистр: "иванов" -> "Иванов"
+    private void FixNames()
+    {
+        Form.LastName = StudentForm.Fix(Form.LastName);
+        Form.FirstName = StudentForm.Fix(Form.FirstName);
+        Form.MiddleName = StudentForm.Fix(Form.MiddleName);
+    }
+}

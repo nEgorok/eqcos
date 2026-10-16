@@ -12,7 +12,10 @@ using Eqcos.Api.Services;
 namespace Eqcos.Api.Controllers;
 
 // что присылает студент при регистрации и входе
-public record RegisterRequest(string Login, string Password, string FullName, string Group);
+// группа приходит двумя частями: GroupDigits = "204", GroupCode = "Лг".
+// string? — поле может прийти пустым; тогда сервер ответит понятной фразой, а не своей стандартной ошибкой
+public record RegisterRequest(string? Login, string? Password, string? LastName, string? FirstName, string? MiddleName,
+                              string? GroupDigits, string? GroupCode, int OfficeId);
 public record LoginRequest(string Login, string Password, bool Staff = false);   // Staff = вход через окно сотрудников
 public record ChangePasswordRequest(string OldPassword, string NewPassword);
 [ApiController]
@@ -35,20 +38,41 @@ public class AuthController : ControllerBase
     // регистрация студента
     [HttpPost("register")]
     public IActionResult Register(RegisterRequest r)
-    {        // номер студенческого — только цифры (так студент не займёт логин вроде admin_kpk)
-        if (r.Login == "" || !r.Login.All(char.IsDigit))
+    {
+        // номер студенческого — только цифры (так студент не займёт логин вроде admin_kpk)
+        var login = (r.Login ?? "").Trim();
+        if (login == "" || !login.All(char.IsDigit))
             return BadRequest("Номер студенческого должен состоять только из цифр");
-        if (_db.Users.Any(u => u.Login == r.Login))
+        if ((r.Password ?? "").Length < 6)
+            return BadRequest("Пароль должен быть не короче 6 символов");
+
+        // ФИО: исправляем регистр сами, потом проверяем
+        var last = StudentData.Fix(r.LastName);
+        var first = StudentData.Fix(r.FirstName);
+        var middle = StudentData.Fix(r.MiddleName);
+        var digits = (r.GroupDigits ?? "").Trim();
+        var code = (r.GroupCode ?? "").Trim();
+
+        // ?? — если первая проверка прошла (null), берём ошибку второй
+        var error = StudentData.CheckName(last, first, middle) ?? StudentData.CheckGroup(_db, digits, code);
+        if (error != null)
+            return BadRequest(error);
+
+        if (!_db.Offices.Any(o => o.Id == r.OfficeId))
+            return BadRequest("Выберите корпус");
+
+        if (_db.Users.Any(u => u.Login == login))
             return BadRequest("Такой номер студенческого уже зарегистрирован");
 
         var user = new User
         {
-            Login = r.Login,
-            FullName = r.FullName,
-            Group = r.Group,
+            Login = login,
+            FullName = StudentData.JoinName(last, first, middle),
+            Group = digits + code,     // "204" + "Лг" = "204Лг"
+            OfficeId = r.OfficeId,     // свой корпус: записываться можно только сюда
             Role = "Student"
         };
-        user.PasswordHash = _hasher.HashPassword(user, r.Password); // пароль -> отпечаток
+        user.PasswordHash = _hasher.HashPassword(user, r.Password!); // пароль -> отпечаток
 
         user.Status = _verifier.Check(user);   // сразу подтвердить или ждать админа
 

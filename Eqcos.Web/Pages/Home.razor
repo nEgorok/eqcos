@@ -23,7 +23,9 @@
             </div>
         </div>
     }
-}@* ---- Статус учётной записи ---- *@
+}
+
+@* ---- Статус учётной записи (свои записи и вызовы — в профиле) ---- *@
 @if (me != null && me.Status == "Pending")
 {
     <div class="alert alert-warning">
@@ -34,7 +36,7 @@
 {
     <div class="alert alert-danger">
         Учётная запись не подтверждена: @me.RejectReason.
-        Исправьте данные в <a href="profile">профиле</a>, и они снова уйдут на проверку.
+        Исправьте данные в <a href="profile?tab=data">профиле</a>, и они снова уйдут на проверку.
     </div>
 }
 @if (me != null && me.Status == "Approved" && (me.PendingFullName != null || me.PendingGroup != null))
@@ -43,25 +45,6 @@
         Изменение ваших данных на проверке в учебной части. Записываться можно, пока действуют прежние данные.
     </div>
 }
-@* ---- Мои записи (студент) ---- *@
-@if (Auth.IsLoggedIn && Auth.Role == "Student" && myBookings != null)
-{
-    @if (myBookings.Count == 0)
-    {
-        <div class="alert alert-info">У вас нет записи</div>
-    }
-    @foreach (var b in myBookings)
-    {
-        <div class="alert @(b.CanCancel ? "alert-info" : "alert-warning")">
-            @(b.CanCancel ? "Вы записаны: " : "Вас вызывают: ")@b.Text
-            @if (b.CanCancel)
-            {
-                <button class="btn btn-sm btn-outline-danger ms-3" @onclick="() => Cancel(b.Id)">Отменить запись</button>
-            }
-        </div>
-    }
-}
-
 @if (message != null)
 {
     <div class="eq-toast">@message</div>
@@ -97,7 +80,7 @@
 @if (purposes != null)
 {
     <div class="mb-3" style="max-width:420px">
-               <EqSelect Items="@purposes.Select(p => new SelectItem(p.Id, p.Name)).ToList()"
+        <EqSelect Items="@purposes.Select(p => new SelectItem(p.Id, p.Name)).ToList()"
                   @bind-Value="purposeId"
                   Placeholder="— выберите цель визита —" />
     </div>
@@ -138,9 +121,8 @@ else
 @code {
     private record OfficeDto(int Id, string Name);
     private record PurposeDto(int Id, string Name, int Minutes);
-    private record MyBookingDto(int Id, string Text, bool CanCancel);
     private record NotificationDto(int Id, string Text, bool CanChange);
-    private record StatusDto(string Status, string? RejectReason, string? PendingFullName, string? PendingGroup);
+    private record StatusDto(string Status, int? OfficeId, string? RejectReason, string? PendingFullName, string? PendingGroup);
     private StatusDto? me;   // статус моей учётной записи
 
     private List<OfficeDto>? offices;
@@ -153,7 +135,6 @@ else
     private DateOnly date;      // выбранный день
 
     private List<string>? slots;
-    private List<MyBookingDto>? myBookings;
     private List<NotificationDto>? notifications;
     private string? message;
 
@@ -169,6 +150,17 @@ else
             date = date.AddDays(1);   // сегодня выходной — сразу показываем понедельник
 
         offices = await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices");
+
+        // студент записывается только в свой корпус — показываем только его вкладку (гость видит все)
+        if (Auth.IsLoggedIn && Auth.Role == "Student")
+        {
+            me = await Http.GetFromJsonAsync<StatusDto>("api/profile");
+            if (me!.OfficeId != null)
+            {
+                offices = offices!.Where(o => o.Id == me.OfficeId).ToList();
+                officeId = me.OfficeId.Value;
+            }
+        }
         purposes = await Http.GetFromJsonAsync<List<PurposeDto>>("api/purposes");
         await LoadAll();
 
@@ -204,7 +196,6 @@ else
 
         if (Auth.IsLoggedIn && Auth.Role == "Student")
         {
-            myBookings = await Http.GetFromJsonAsync<List<MyBookingDto>>("api/slots/my");
             notifications = await Http.GetFromJsonAsync<List<NotificationDto>>("api/notifications");
             me = await Http.GetFromJsonAsync<StatusDto>("api/profile");
         }
@@ -237,7 +228,7 @@ else
 
         if (purposeId == 0)
         {
-            message = "Сначала выберите цель визита";
+            Say("Сначала выберите цель визита");
             return;
         }
 
@@ -248,14 +239,7 @@ else
             time = time + ":00",
             purposeId
         });
-        message = await resp.Content.ReadAsStringAsync();
-        await LoadAll();
-    }
-
-    private async Task Cancel(int id)
-    {
-        var resp = await Http.DeleteAsync($"api/slots/my/{id}");
-        message = await resp.Content.ReadAsStringAsync();
+        Say(await resp.Content.ReadAsStringAsync());   // «Вы записаны: ...» — сама запись теперь в профиле
         await LoadAll();
     }
 
@@ -273,7 +257,7 @@ else
         message = await resp.Content.ReadAsStringAsync();
         await LoadAll();
     }
-        // показать сообщение и убрать его через 5 секунд
+    // показать сообщение и убрать его через 5 секунд
     private void Say(string text)
     {
         message = text;
