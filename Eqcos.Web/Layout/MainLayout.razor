@@ -18,10 +18,6 @@
                 <NavLink href="admin/day">Вызов и закрытие</NavLink>
                 <NavLink href="requests">Заявки</NavLink>
             }
-            @if (Auth.IsLoggedIn)
-            {
-                <NavLink href="profile">Профиль</NavLink>
-            }
         </nav>
 
         @if (Auth.IsLoggedIn)
@@ -40,12 +36,8 @@
         <div class="eq-service">Электронная очередь<br />учебной части</div>
 
         <div class="eq-actions">
-            @if (Auth.IsLoggedIn)
-            {
-                <a class="btn eq-btn eq-btn-blue" href="profile">Профиль</a>
-                <button class="btn eq-btn eq-btn-green" @onclick="Logout">Выйти</button>
-            }
-            else
+            @* вошли — кнопок нет: профиль открывается по имени сверху, «Выйти» внутри профиля *@
+            @if (!Auth.IsLoggedIn)
             {
                 <a class="btn eq-btn eq-btn-blue" href="login">Войти</a>
                 <a class="btn eq-btn eq-btn-green" href="register">Регистрация</a>
@@ -92,13 +84,6 @@
         Api.Changed += () => InvokeAsync(StateHasChanged);            // связь пропала/появилась — плашка
         Api.Unauthorized += () => InvokeAsync(SessionExpired);        // вход истёк — на окно входа
         Nav.LocationChanged += (_, _) => boundary?.Recover();         // перешли на другую страницу — убрать ошибку
-    }
-
-    // «Выйти» — выходим и сразу открываем окно входа
-    private async Task Logout()
-    {
-        await Auth.Logout();
-        Nav.NavigateTo("login");
     }
 
     // сервер ответил 401: пропуск истёк (8 часов) или аккаунт удалён

@@ -97,13 +97,9 @@
 @if (purposes != null)
 {
     <div class="mb-3" style="max-width:420px">
-        <select class="form-select" @bind="purposeId">
-            <option value="0">— выберите цель визита —</option>
-            @foreach (var p in purposes)
-            {
-                <option value="@p.Id">@p.Name</option>
-            }
-        </select>
+               <EqSelect Items="@purposes.Select(p => new SelectItem(p.Id, p.Name)).ToList()"
+                  @bind-Value="purposeId"
+                  Placeholder="— выберите цель визита —" />
     </div>
 }
 

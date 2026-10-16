@@ -1,6 +1,7 @@
 ﻿@page "/admin/history"
 @inject HttpClient Http
 @inject AuthService Auth
+@inject IJSRuntime JS
 
 <PageTitle>История записей</PageTitle>
 <h1>История записей</h1>
@@ -11,25 +12,25 @@
 }
 else
 {
-    @* ---- Фильтры ---- *@
+    @* ---- Фильтры: применяются сразу, кнопка не нужна ---- *@
     <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
         <div>
             <label class="form-label mb-0 small">С</label>
-            <input type="date" class="form-control" @bind="from" />
+            <input type="date" class="form-control" @bind="from" @bind:after="Load" />
         </div>
         <div>
             <label class="form-label mb-0 small">По</label>
-            <input type="date" class="form-control" @bind="to" />
+            <input type="date" class="form-control" @bind="to" @bind:after="Load" />
         </div>
         <div style="min-width:240px">
             <label class="form-label mb-0 small">ФИО или группа</label>
-            <input class="form-control" placeholder="Например: Тестов или 348" @bind="search" />
+            <input class="form-control" placeholder="Например: Тестов или 348"
+                   @bind="search" @bind:event="oninput" @bind:after="SearchChanged" />
         </div>
         <div class="form-check mb-2">
-            <input class="form-check-input" type="checkbox" id="showCancelled" @bind="showCancelled" />
+            <input class="form-check-input" type="checkbox" id="showCancelled" @bind="showCancelled" @bind:after="Load" />
             <label class="form-check-label" for="showCancelled">Показать отмены студентов</label>
         </div>
-        <button class="btn btn-primary" @onclick="Load">Показать</button>
     </div>
 
     @if (message != null)
@@ -68,16 +69,28 @@ else
                         <td>@b.StudentName <span class="text-muted small">@b.Login</span></td>
                         <td>@b.Group</td>
                         <td>@(b.IsSummon ? "Вызов: " : "")@b.Purpose</td>
-                        <td>@BookingText.Status(b)</td>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <span>@BookingText.Status(b)</span>
+                                @if (b.FirstMark != null)
+                                {
+                                    <span class="small text-muted text-nowrap">было: @BookingText.Word(b.FirstMark)</span>
+                                }
+                            </div>
+                        </td>
                         <td>
                             <div class="d-flex gap-1 flex-wrap justify-content-end">
                                 @if (b.CanCame)
                                 {
-                                    <button class="btn btn-sm btn-success" @onclick='() => Mark(b.Id, "Came")'>Пришёл</button>
+                                    <button class="btn btn-sm btn-success" @onclick='() => Mark(b, "Came")'>
+                                        @(b.Status == "NoShow" ? "Исправить: пришёл" : "Пришёл")
+                                    </button>
                                 }
                                 @if (b.CanNoShow)
                                 {
-                                    <button class="btn btn-sm btn-outline-danger" @onclick='() => Mark(b.Id, "NoShow")'>Не пришёл</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick='() => Mark(b, "NoShow")'>
+                                        @(b.Status == "Came" ? "Исправить: не пришёл" : "Не пришёл")
+                                    </button>
                                 }
                                 @if (b.CanDelete)
                                 {
@@ -112,16 +125,46 @@ else
             await Load();
     }
 
+    private CancellationTokenSource? searchDelay;   // чтобы не искать на каждую букву
+
     private async Task Load()
     {
+        if (from > to)
+        {
+            Say("Дата «с» позже даты «по»");
+            rows = new();
+            return;
+        }
+
         var url = $"api/admin/history?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}" +
                   $"&showCancelled={showCancelled}&search={Uri.EscapeDataString(search)}";
         rows = await Http.GetFromJsonAsync<List<AdminBookingDto>>(url);
     }
 
-    private async Task Mark(int id, string status)
+    // поиск: ждём 0,4 секунды после последней буквы и только потом спрашиваем сервер
+    private async Task SearchChanged()
     {
-        var resp = await Http.PostAsJsonAsync($"api/admin/bookings/{id}/mark", new { status });
+        searchDelay?.Cancel();   // предыдущее ожидание больше не нужно
+        searchDelay = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(400, searchDelay.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;   // за это время ввели ещё букву
+        }
+        await Load();
+    }
+
+    private async Task Mark(AdminBookingDto b, string status)
+    {
+        // отметка уже стоит — значит, это исправление, а оно бывает только один раз
+        var correcting = b.Status == "Came" || b.Status == "NoShow";
+        if (correcting && !await JS.InvokeAsync<bool>("confirm", "Исправить отметку? Второй раз исправить будет нельзя."))
+            return;
+
+        var resp = await Http.PostAsJsonAsync($"api/admin/bookings/{b.Id}/mark", new { status });
         await Done(await resp.Content.ReadAsStringAsync());
     }
 

@@ -35,6 +35,28 @@
         <span class="dismiss">🗙</span>
     </div>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+    <script>
+                // Enter в поле формы с классом eq-enter: перейти к следующему полю,
+                // а в последнем поле — нажать кнопку с классом eq-submit
+                document.addEventListener('keydown', function (e) {
+                    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT')
+                        return;
+                    var box = e.target.closest('.eq-enter');
+                    if (!box)
+                        return;
+                    e.preventDefault();
+                    var fields = Array.from(box.querySelectorAll('input:not([type=checkbox]):not([disabled])'));
+                    var i = fields.indexOf(e.target);
+                    if (i < fields.length - 1) {
+                        fields[i + 1].focus();
+                        return;
+                    }
+                    e.target.blur();   // чтобы сайт успел запомнить, что введено в последнем поле
+                    var button = box.querySelector('.eq-submit');
+                    if (button)
+                        button.click();
+                });
+    </script>
 </body>
 
 </html>

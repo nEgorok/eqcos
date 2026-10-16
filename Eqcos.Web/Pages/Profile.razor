@@ -4,7 +4,13 @@
 @inject NavigationManager Nav
 
 <PageTitle>Профиль</PageTitle>
-<h1>Профиль</h1>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2" style="max-width:520px">
+    <h1 class="mb-0">Профиль</h1>
+    @if (Auth.IsLoggedIn)
+    {
+        <button class="btn eq-btn eq-btn-green" @onclick="Logout">Выйти</button>
+    }
+</div>
 
 @if (!Auth.IsLoggedIn)
 {
@@ -22,8 +28,8 @@ else
     }
 
     @* ---- Данные ---- *@
-    <div class="card mb-3" style="max-width:520px">
-        <div class="card-body">
+     <div class="card mb-3 mt-3" style="max-width:520px">
+        <div class="card-body eq-enter">
             <h5 class="card-title">Мои данные</h5>
 
             @if (profile.Role == "Admin")
@@ -82,12 +88,13 @@ else
 
     @* ---- Смена пароля ---- *@
     <div class="card mb-3" style="max-width:520px">
-        <div class="card-body">
+             <div class="card-body eq-enter">
             <h5 class="card-title">Сменить пароль</h5>
             <PasswordInput Class="mb-2" Placeholder="Старый пароль" @bind-Value="oldPassword" />
             <PasswordInput Class="mb-2" Placeholder="Новый пароль" @bind-Value="newPassword" />
             <PasswordInput Class="mb-2" Placeholder="Повторите новый пароль" @bind-Value="repeat" />
-            <button class="btn btn-primary" @onclick="ChangePassword">Сменить пароль</button>
+            <button class="btn btn-primary eq-submit" @onclick="ChangePassword">Сменить пароль</button>
+
         </div>
     </div>
 
@@ -196,7 +203,12 @@ else
         if (ok)
             oldPassword = newPassword = repeat = "";
     }
-
+        // «Выйти» — выходим и сразу открываем окно входа
+    private async Task Logout()
+    {
+        await Auth.Logout();
+        Nav.NavigateTo("login");
+    }
     private async Task DeleteAccount()
     {
         var resp = await Http.PostAsJsonAsync("api/profile/delete", new { password = deletePassword });

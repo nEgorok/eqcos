@@ -435,3 +435,43 @@ h2 {
     font-weight: 600;
     letter-spacing: 0.06em;
 }
+/* ===== Выпадающий список со скруглённым меню (EqSelect) ===== */
+.eq-select {
+    position: relative;
+}
+
+.eq-select-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+}
+
+.eq-select-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 11;
+    background: #fff;
+    border: 1px solid var(--eq-line);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.eq-select-item {
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+    .eq-select-item:hover {
+        background: var(--eq-head);
+    }
+
+    .eq-select-item.active {
+        background: var(--eq-blue);
+        color: #fff;
+    }

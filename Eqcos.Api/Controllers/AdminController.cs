@@ -17,15 +17,16 @@ public record AdminBooking(
     int Id, DateOnly Date, TimeOnly Time, TimeOnly End,
     string Login, string StudentName, string Group, string Purpose, bool IsSummon,
     string Status, bool Moved, string? Note,
+    string? FirstMark, DateTime? CorrectedAt,
     bool CanCame, bool CanNoShow, bool CanDelete);
 
-// панель учебной части: живая очередь, история, отметки, удаление
+// панель учебной части: очередь, история, отметки, удаление
 [ApiController]
 [Route("api/admin")]
 [Authorize(Roles = "Admin")]
 public class AdminController : ControllerBase
 {
-    private const int NoShowDays = 3;   // «Не пришёл» можно поставить в течение 3 рабочих дней
+    private const int NoShowDays = 3;   // «Не пришёл» и исправление отметки — в течение 3 рабочих дней
 
     private readonly AppDbContext _db;
 
@@ -37,7 +38,7 @@ public class AdminController : ControllerBase
     private int? CurrentOfficeId =>
         int.TryParse(User.FindFirst("office")?.Value, out var id) ? id : null;
 
-    // ЖИВАЯ ОЧЕРЕДЬ: действующие записи своего корпуса на сегодня
+    // ОЧЕРЕДЬ: действующие записи своего корпуса на сегодня
     [HttpGet("queue")]
     public IActionResult GetQueue()
     {
@@ -86,7 +87,7 @@ public class AdminController : ControllerBase
         return Ok(ToRows(list));
     }
 
-    // ОТМЕТКА: «Пришёл» или «Не пришёл» (и исправление ошибочной отметки)
+    // ОТМЕТКА: «Пришёл» или «Не пришёл». Исправить ошибочную отметку можно один раз.
     [HttpPost("bookings/{id}/mark")]
     public IActionResult Mark(int id, MarkRequest r)
     {
@@ -97,21 +98,29 @@ public class AdminController : ControllerBase
         if (r.Status == BookingStatus.Came)
         {
             if (!CanCame(b))
-                return BadRequest("Отметить «Пришёл» можно только в день записи или позже");
-            b.Status = BookingStatus.Came;
+                return BadRequest(b.FirstMark != null ? "Отметку уже исправляли, второй раз нельзя"
+                    : b.Status == BookingStatus.NoShow ? $"Исправить отметку можно только в течение {NoShowDays} рабочих дней"
+                    : "Отметить «Пришёл» можно только в день записи или позже");
         }
         else if (r.Status == BookingStatus.NoShow)
         {
             if (!CanNoShow(b))
-                return BadRequest(Clock.NotEnded(b.Date, b.Time, b.Minutes)
-                    ? "«Не пришёл» можно отметить только после окончания записи"
+                return BadRequest(b.FirstMark != null ? "Отметку уже исправляли, второй раз нельзя"
+                    : Clock.NotEnded(b.Date, b.Time, b.Minutes) ? "«Не пришёл» можно отметить только после окончания записи"
                     : $"«Не пришёл» можно отметить только в течение {NoShowDays} рабочих дней");
-            b.Status = BookingStatus.NoShow;
         }
         else
         {
             return BadRequest("Неизвестная отметка");
         }
+
+        // запись уже была отмечена — значит, это исправление: запоминаем, что стояло раньше
+        if (b.Status == BookingStatus.Came || b.Status == BookingStatus.NoShow)
+        {
+            b.FirstMark = b.Status;
+            b.CorrectedAt = DateTime.UtcNow;
+        }
+        b.Status = r.Status;
 
         _db.SaveChanges();
         return Ok($"{b.StudentName}, {b.Date:dd.MM} {b.Time:HH:mm}: {(b.Status == BookingStatus.Came ? "пришёл" : "не пришёл")}");
@@ -148,15 +157,20 @@ public class AdminController : ControllerBase
     // ---------- ПРАВИЛА КНОПОК ----------
     // Одни и те же правила и для показа кнопок, и для проверки на сервере.
 
+    // исправить уже поставленную отметку: только один раз и в течение 3 рабочих дней
+    private static bool CanCorrect(Booking b) =>
+        b.FirstMark == null && Clock.WorkdaysBetween(b.Date, Clock.Today) <= NoShowDays;
+
     // «Пришёл»: действующая запись сегодня или раньше; или исправить ошибочное «Не пришёл»
     private static bool CanCame(Booking b) =>
-        (b.Status == BookingStatus.Active && b.Date <= Clock.Today) || b.Status == BookingStatus.NoShow;
+        (b.Status == BookingStatus.Active && b.Date <= Clock.Today)
+        || (b.Status == BookingStatus.NoShow && CanCorrect(b));
 
-    // «Не пришёл»: приём уже закончился и прошло не больше 3 рабочих дней
+    // «Не пришёл»: приём уже закончился, и прошло не больше 3 рабочих дней; или исправить ошибочное «Пришёл»
     private static bool CanNoShow(Booking b) =>
-        (b.Status == BookingStatus.Active || b.Status == BookingStatus.Came)
-        && !Clock.NotEnded(b.Date, b.Time, b.Minutes)
-        && Clock.WorkdaysBetween(b.Date, Clock.Today) <= NoShowDays;
+        !Clock.NotEnded(b.Date, b.Time, b.Minutes)
+        && ((b.Status == BookingStatus.Active && Clock.WorkdaysBetween(b.Date, Clock.Today) <= NoShowDays)
+            || (b.Status == BookingStatus.Came && CanCorrect(b)));
 
     // удалить: действующая и ещё не закончилась
     private static bool CanDelete(Booking b) =>
@@ -182,6 +196,7 @@ public class AdminController : ControllerBase
                 b.StudentName, b.Group,
                 purpose?.Name ?? "—", purpose?.AdminOnly == true,
                 b.Status, b.Moved, b.Note,
+                b.FirstMark, b.CorrectedAt == null ? null : Clock.ToMsk(b.CorrectedAt.Value),
                 CanCame(b), CanNoShow(b), CanDelete(b));
         }).ToList();
     }

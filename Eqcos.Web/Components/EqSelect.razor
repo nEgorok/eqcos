@@ -1,0 +1,41 @@
+﻿@* выпадающий список со скруглённым меню.
+   Меню обычного select рисует сам браузер, поэтому его не скруглить — делаем своё. *@
+<div class="eq-select @Class">
+    <button type="button" class="form-select text-start" @onclick="() => open = !open">
+        @(Items.FirstOrDefault(i => i.Id == Value)?.Name ?? Placeholder)
+    </button>
+
+    @if (open)
+    {
+        @* прозрачный слой на весь экран: щёлкнули мимо меню — закрыть *@
+        <div class="eq-select-backdrop" @onclick="() => open = false"></div>
+
+        <div class="eq-select-menu">
+            @foreach (var item in Items)
+            {
+                <div class="eq-select-item @(item.Id == Value ? "active" : "")" @onclick="() => Pick(item.Id)">
+                    @item.Name
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<SelectItem> Items { get; set; } = new();
+
+    // Value + ValueChanged — пара для @bind-Value="purposeId"
+    [Parameter] public int Value { get; set; }
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "— выберите —";
+    [Parameter] public string Class { get; set; } = "";
+
+    private bool open;   // открыто ли меню
+
+    private async Task Pick(int id)
+    {
+        open = false;
+        await ValueChanged.InvokeAsync(id);
+    }
+}
