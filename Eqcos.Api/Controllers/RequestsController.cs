@@ -9,8 +9,9 @@ namespace Eqcos.Api.Controllers;
 // FullName и Group — то, что админ видел на экране, когда нажимал кнопку
 public record ApproveRequest(string FullName, string Group);
 public record RejectRequest(string Reason, string FullName, string Group);
+public record MoveRequest(int OfficeId);   // передать заявку в другой корпус
 
-// заявки: новые регистрации и изменения данных
+// заявки: новые регистрации и изменения данных (в том числе перевод в другой корпус)
 [ApiController]
 [Route("api/requests")]
 [Authorize(Roles = "Admin")]
@@ -27,15 +28,19 @@ public class RequestsController : ControllerBase
     private int? CurrentOfficeId =>
         int.TryParse(User.FindFirst("office")?.Value, out var id) ? id : null;
 
-    // студент своего корпуса (или null, если такого нет)
+    // заявка на изменение = есть новые данные "в стороне"
+    private static bool HasChange(User u) =>
+        u.PendingFullName != null || u.PendingGroup != null || u.PendingOfficeId != null;
+
+    // чья это заявка: регистрацию проверяет выбранный корпус, перевод — НОВЫЙ корпус
+    private static int? TargetOffice(User u) => HasChange(u) ? (u.PendingOfficeId ?? u.OfficeId) : u.OfficeId;
+
+    // студент, чья заявка относится к корпусу этого админа (или null)
     private User? FindStudent(int id)
     {
         var u = _db.Users.Find(id);
-        return u != null && u.Role == "Student" && u.OfficeId == CurrentOfficeId ? u : null;
+        return u != null && u.Role == "Student" && TargetOffice(u) == CurrentOfficeId ? u : null;
     }
-
-    // заявка на изменение = есть новое ФИО или группа "в стороне"
-    private static bool HasChange(User u) => u.PendingFullName != null || u.PendingGroup != null;
 
     // админ видел ровно то, что сейчас лежит в заявке? (студент мог успеть поменять данные)
     private static bool SameAsSeen(User u, string fullName, string group) =>
@@ -43,13 +48,18 @@ public class RequestsController : ControllerBase
 
     private const string Changed = "Студент только что изменил данные. Обновите список и проверьте заново.";
 
+    private string? OfficeName(int? id) => id == null ? null : _db.Offices.Find(id)?.Name;
+
     // все заявки своего корпуса (сначала самые ранние)
     [HttpGet]
     public IActionResult GetPending()
     {
+        var cur = CurrentOfficeId;
         var users = _db.Users
-            .Where(u => u.Role == "Student" && u.OfficeId == CurrentOfficeId &&
-                        (u.Status == "Pending" || u.PendingFullName != null || u.PendingGroup != null))
+            .Where(u => u.Role == "Student" &&
+                        ((u.Status == "Pending" && u.OfficeId == cur) ||
+                         ((u.PendingFullName != null || u.PendingGroup != null || u.PendingOfficeId != null)
+                          && (u.PendingOfficeId ?? u.OfficeId) == cur)))
             .OrderBy(u => u.Id)
             .ToList();
 
@@ -57,11 +67,17 @@ public class RequestsController : ControllerBase
         {
             u.Id,
             u.Login,
-            Kind = HasChange(u) ? "Изменение данных" : "Новая регистрация",
+            Kind = !HasChange(u) ? "Новая регистрация"
+                 : u.PendingOfficeId != null && u.PendingOfficeId != u.OfficeId ? "Перевод"
+                 : "Изменение данных",
+            Reason = HasChange(u) ? u.PendingReason : null,
             u.FullName,                       // текущие данные
             u.Group,
+            Office = OfficeName(u.OfficeId),
             NewFullName = u.PendingFullName,  // новые (только у изменения)
-            NewGroup = u.PendingGroup
+            NewGroup = u.PendingGroup,
+            NewOffice = OfficeName(u.PendingOfficeId),
+            TargetOfficeId = TargetOffice(u)  // корпус, в котором сейчас лежит заявка
         }));
     }
 
@@ -71,33 +87,53 @@ public class RequestsController : ControllerBase
     {
         var u = FindStudent(id);
         if (u == null)
-            return NotFound("Студент не найден");
+            return NotFound("Заявка не найдена. Обновите список");
         if (!SameAsSeen(u, r.FullName, r.Group))
             return Conflict(Changed);
 
         if (HasChange(u))
         {
+            var oldOffice = u.OfficeId;
+
             // применяем новые данные
             u.FullName = u.PendingFullName ?? u.FullName;
             u.Group = u.PendingGroup ?? u.Group;
+            u.OfficeId = u.PendingOfficeId ?? u.OfficeId;
             u.PendingFullName = null;
             u.PendingGroup = null;
+            u.PendingOfficeId = null;
+            u.PendingReason = null;
 
-            // и в будущих записях, чтобы админ видел актуальные данные
-            foreach (var b in _db.Bookings.Where(b => b.StudentId == u.Id && b.Date >= Clock.Today && b.Status == BookingStatus.Active))
+            var future = _db.Bookings
+                .Where(b => b.StudentId == u.Id && b.Date >= Clock.Today && b.Status == BookingStatus.Active)
+                .ToList();
+            foreach (var b in future)
             {
+                // перевели в другой корпус — своя запись в старый корпус отменяется (вызов остаётся)
+                if (b.OfficeId != u.OfficeId && !IsSummon(b))
+                {
+                    b.Status = BookingStatus.SystemCancelled;
+                    b.Note = "Перевод в другой корпус";
+                    Mover.Notify(_db, u.Id, null,
+                        $"Ваша запись на {b.Date:dd.MM} {b.Time:HH:mm} отменена: вы переведены в другой корпус.");
+                    continue;
+                }
+                // в остальных записях — актуальные данные, чтобы админ видел их в очереди
                 b.StudentName = u.FullName;
                 b.Group = u.Group;
             }
 
-            Notify(u.Id, $"Учебная часть подтвердила изменение данных: {u.FullName}, группа {u.Group}.");
+            var text = oldOffice != u.OfficeId
+                ? $"Учебная часть подтвердила перевод: {OfficeName(u.OfficeId)}, {u.FullName}, группа {u.Group}."
+                : $"Учебная часть подтвердила изменение данных: {u.FullName}, группа {u.Group}.";
+            Mover.Notify(_db, u.Id, null, text);
             _db.SaveChanges();
-            return Ok($"Изменение данных подтверждено: {u.FullName}");
+            return Ok($"Подтверждено: {u.FullName}");
         }
 
         u.Status = "Approved";
         u.RejectReason = null;
-        Notify(u.Id, "Учебная часть подтвердила вашу учётную запись. Теперь можно записываться.");
+        Mover.Notify(_db, u.Id, null, "Учебная часть подтвердила вашу учётную запись. Теперь можно записываться.");
         _db.SaveChanges();
         return Ok($"Учётная запись подтверждена: {u.FullName}");
     }
@@ -112,7 +148,7 @@ public class RequestsController : ControllerBase
 
         var u = FindStudent(id);
         if (u == null)
-            return NotFound("Студент не найден");
+            return NotFound("Заявка не найдена. Обновите список");
         if (!SameAsSeen(u, r.FullName, r.Group))
             return Conflict(Changed);
 
@@ -121,25 +157,52 @@ public class RequestsController : ControllerBase
             // новые данные выбрасываем, старые остаются, учётная запись остаётся подтверждённой
             u.PendingFullName = null;
             u.PendingGroup = null;
-            Notify(u.Id, $"Изменение данных отклонено: {reason}. Остались прежние данные.");
+            u.PendingOfficeId = null;
+            u.PendingReason = null;
+            Mover.Notify(_db, u.Id, null, $"Изменение данных отклонено: {reason}. Остались прежние данные.");
             _db.SaveChanges();
             return Ok($"Изменение данных отклонено: {u.FullName}");
         }
 
-        u.Status = "Rejected";
-        u.RejectReason = reason;
-        Notify(u.Id, $"Учётная запись не подтверждена: {reason}. Исправьте данные в профиле.");
+        // новая регистрация: учётку стираем, номер освобождается.
+        // Причину 30 дней покажем при входе с верным паролем.
+        _db.RejectedAccounts.Add(new RejectedAccount
+        {
+            Login = u.Login,
+            PasswordHash = u.PasswordHash,
+            Reason = reason,
+            RejectedAt = DateTime.UtcNow
+        });
+        _db.Notifications.RemoveRange(_db.Notifications.Where(n => n.UserId == u.Id));
+        _db.Users.Remove(u);
         _db.SaveChanges();
-        return Ok($"Учётная запись отклонена: {u.FullName}");
+        return Ok($"Регистрация отклонена, учётная запись удалена: {u.FullName}");
     }
 
-    private void Notify(int userId, string text)
+    // передать заявку в другой корпус (студент ошибся корпусом)
+    [HttpPost("{id}/office")]
+    public IActionResult Move(int id, MoveRequest r)
     {
-        _db.Notifications.Add(new Notification
-        {
-            UserId = userId,
-            Text = text,
-            CreatedAt = DateTime.UtcNow   // только UTC
-        });
+        var u = FindStudent(id);
+        if (u == null)
+            return NotFound("Заявка не найдена. Обновите список");
+
+        var office = _db.Offices.Find(r.OfficeId);
+        if (office == null)
+            return BadRequest("Корпус не найден");
+        if (r.OfficeId == CurrentOfficeId)
+            return BadRequest("Заявка уже в вашем корпусе");
+
+        if (HasChange(u))
+            u.PendingOfficeId = r.OfficeId;   // изменение данных: новый корпус — тоже "в стороне"
+        else
+            u.OfficeId = r.OfficeId;          // новая регистрация: просто меняем корпус
+
+        Mover.Notify(_db, u.Id, null, $"Учебная часть передала вашу заявку в другой корпус: {office.Name}.");
+        _db.SaveChanges();
+        return Ok($"Заявка передана ({office.Name}): {u.FullName}");
     }
+
+    // вызов ли это (цель "только админ")
+    private bool IsSummon(Booking b) => _db.Purposes.Find(b.PurposeId)?.AdminOnly == true;
 }

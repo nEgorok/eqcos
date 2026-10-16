@@ -83,10 +83,11 @@ else
                     {
                         <div class="alert alert-danger py-2">Учётная запись не подтверждена: @profile.RejectReason. Исправьте данные — они снова уйдут на проверку.</div>
                     }
-                    @if (profile.PendingFullName != null || profile.PendingGroup != null)
+                    @if (profile.PendingFullName != null || profile.PendingGroup != null || profile.PendingOfficeId != null)
                     {
                         <div class="alert alert-warning py-2">
-                            На проверке изменение: @profile.PendingFullName, группа @profile.PendingGroup.
+                            На проверке изменение: @profile.PendingFullName, группа @profile.PendingGroup,
+                            @(profile.PendingOffice ?? profile.Office)@(profile.PendingReason != null ? $" (причина: {profile.PendingReason})" : "").
                             Пока действуют прежние данные.
                         </div>
                     }
@@ -102,8 +103,21 @@ else
                     }
                     else
                     {
+                        @* подсказки причины: можно выбрать или написать свою *@
+                        <datalist id="change-reasons">
+                            <option value="Перевод"></option>
+                            <option value="Ошибка при регистрации"></option>
+                        </datalist>
+
                         <div class="eq-enter" style="max-width:420px">
-                            <StudentFields Form="form" />
+                            <StudentFields Form="form" ShowOffice="true" />
+                            @if (profile.Status == "Approved")
+                            {
+                                @* подтверждённому изменения проверяет учебная часть — нужна причина *@
+                                <input class="form-control mb-2" list="change-reasons" placeholder="Причина изменения"
+                                       @bind="form.Reason" />
+                                <div class="form-text mt-0 mb-2">При смене корпуса заявку проверит учебная часть нового корпуса</div>
+                            }
                             <div class="d-flex gap-2 mt-2">
                                 <button class="btn btn-primary eq-submit" @onclick="SaveData">Сохранить</button>
                                 <button class="btn btn-outline-secondary" @onclick="() => editing = false">Отмена</button>
@@ -134,7 +148,8 @@ else
 
     private record ProfileDto(string Login, string FullName, string Group, string Role, int? OfficeId, string? Office,
                               string Status, string? RejectReason,
-                              string? PendingFullName, string? PendingGroup);
+                              string? PendingFullName, string? PendingGroup,
+                              int? PendingOfficeId, string? PendingOffice, string? PendingReason);
     private record MyBookingDto(int Id, string Text, bool CanCancel);
 
     // статус по-русски
@@ -190,7 +205,8 @@ else
     // «Изменить»: в полях — заявка на проверке, если она есть, иначе текущие данные
     private void StartEdit()
     {
-        form.Fill(profile!.PendingFullName ?? profile.FullName, profile.PendingGroup ?? profile.Group);
+        form.Fill(profile!.PendingFullName ?? profile.FullName, profile.PendingGroup ?? profile.Group,
+                  profile.PendingOfficeId ?? profile.OfficeId ?? 0);
         message = null;
         editing = true;
     }
@@ -204,7 +220,7 @@ else
 
     private async Task SaveData()
     {
-        var error = form.Check(needOffice: false);
+        var error = form.Check(needOffice: true);
         if (error != null)
         {
             ok = false;

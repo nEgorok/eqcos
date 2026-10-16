@@ -353,6 +353,34 @@ namespace Eqcos.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Eqcos.Api.Models.RejectedAccount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Login")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RejectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RejectedAccounts");
+                });
+
             modelBuilder.Entity("Eqcos.Api.Models.User", b =>
                 {
                     b.Property<int>("Id")
@@ -360,6 +388,9 @@ namespace Eqcos.Api.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -384,6 +415,12 @@ namespace Eqcos.Api.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("PendingGroup")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("PendingOfficeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PendingReason")
                         .HasColumnType("text");
 
                     b.Property<string>("RejectReason")

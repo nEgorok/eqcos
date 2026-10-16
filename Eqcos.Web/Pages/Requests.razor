@@ -1,6 +1,7 @@
 ﻿@page "/requests"
 @inject HttpClient Http
 @inject AuthService Auth
+@inject IJSRuntime JS
 
 <PageTitle>Заявки</PageTitle>
 <h1>Заявки на подтверждение</h1>
@@ -36,16 +37,37 @@ else
     }
     else
     {
+        @* ---- Отклонить выбранные (галочки слева) ---- *@
+        @if (selected.Count > 0)
+        {
+            <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
+                <span>Выбрано: @selected.Count</span>
+                <input class="form-control form-control-sm" style="max-width:260px"
+                       list="reject-reasons" placeholder="Причина отказа" @bind="bulkReason" />
+                <button class="btn btn-sm btn-outline-danger" @onclick="RejectSelected">Отклонить выбранные</button>
+            </div>
+        }
+
         <table class="table align-middle">
             <thead>
-                <tr><th>Студенческий</th><th>Заявка</th><th>ФИО</th><th>Группа</th><th></th></tr>
+                <tr><th></th><th>Студенческий</th><th>Заявка</th><th>ФИО</th><th>Группа</th><th>Корпус</th><th></th></tr>
             </thead>
             <tbody>
                 @foreach (var s in list)
                 {
                     <tr>
+                        <td>
+                            <input class="form-check-input" type="checkbox" checked="@selected.Contains(s.Id)"
+                                   @onchange="e => Toggle(s.Id, (bool)e.Value!)" />
+                        </td>
                         <td>@s.Login</td>
-                        <td>@s.Kind</td>
+                        <td>
+                            @s.Kind
+                            @if (s.Reason != null)
+                            {
+                                <div class="small text-muted">@s.Reason</div>
+                            }
+                        </td>
                         <td>
                             @if (s.NewFullName != null && s.NewFullName != s.FullName)
                             {
@@ -68,11 +90,20 @@ else
                                 @s.Group
                             }
                         </td>
+                        <td style="min-width:200px">
+                            @if (s.NewOffice != null && s.NewOffice != s.Office)
+                            {
+                                <span class="text-muted text-decoration-line-through">@s.Office</span><br />
+                            }
+                            @* выбрать другой корпус = передать заявку туда (если студент ошибся) *@
+                            <EqSelect Items="@officeItems" Value="@(s.TargetOfficeId ?? 0)"
+                                      ValueChanged="@(id => Move(s.Id, id))" />
+                        </td>
                         <td>
                             <div class="d-flex gap-2">
                                 <button class="btn btn-sm btn-success" @onclick="() => Approve(s.Id)">Подтвердить</button>
                                 <input class="form-control form-control-sm" style="max-width:220px"
-                                      list="reject-reasons" placeholder="Причина отказа" @bind="reasons[s.Id]" />
+                                       list="reject-reasons" placeholder="Причина отказа" @bind="reasons[s.Id]" />
                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => Reject(s.Id)">Отклонить</button>
                             </div>
                         </td>
@@ -84,17 +115,25 @@ else
 }
 
 @code {
-    private record RequestDto(int Id, string Login, string Kind, string FullName, string Group,
-                              string? NewFullName, string? NewGroup);
+    private record RequestDto(int Id, string Login, string Kind, string? Reason,
+                              string FullName, string Group, string? Office,
+                              string? NewFullName, string? NewGroup, string? NewOffice, int? TargetOfficeId);
+    private record OfficeDto(int Id, string Name);
 
     private List<RequestDto>? list;
+    private List<SelectItem> officeItems = new();
     private Dictionary<int, string> reasons = new();   // Id студента -> введённая причина
+    private HashSet<int> selected = new();              // отмеченные галочкой
+    private string bulkReason = "";
     private string? message;
 
     protected override async Task OnInitializedAsync()
     {
-        if (Auth.Role == "Admin")
-            await Load();
+        if (Auth.Role != "Admin")
+            return;
+        var offices = (await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices"))!;
+        officeItems = offices.Select(o => new SelectItem(o.Id, o.Name)).ToList();
+        await Load();
     }
 
     private async Task Load()
@@ -105,6 +144,17 @@ else
         foreach (var s in list!)
             if (!reasons.ContainsKey(s.Id))
                 reasons[s.Id] = "";
+
+        // галочки только у тех, кто ещё в списке
+        selected.IntersectWith(list.Select(s => s.Id));
+    }
+
+    private void Toggle(int id, bool on)
+    {
+        if (on)
+            selected.Add(id);
+        else
+            selected.Remove(id);
     }
 
     private async Task Approve(int id)
@@ -120,10 +170,58 @@ else
     private async Task Reject(int id)
     {
         var s = list!.First(x => x.Id == id);
-        var resp = await Http.PostAsJsonAsync($"api/requests/{id}/reject",
-            new { reason = reasons[id], fullName = s.NewFullName ?? s.FullName, group = s.NewGroup ?? s.Group });
+        if (s.Kind == "Новая регистрация" &&
+            !await JS.InvokeAsync<bool>("confirm", $"Отклонить регистрацию {s.FullName}? Учётная запись будет удалена."))
+            return;
+
+        var resp = await SendReject(s, reasons[id]);
         Say(await resp.Content.ReadAsStringAsync());
         reasons[id] = "";
+        await Load();
+    }
+
+    // отклонить одну заявку; отправляем то, что админ видит на экране
+    private Task<HttpResponseMessage> SendReject(RequestDto s, string reason) =>
+        Http.PostAsJsonAsync($"api/requests/{s.Id}/reject",
+            new { reason, fullName = s.NewFullName ?? s.FullName, group = s.NewGroup ?? s.Group });
+
+    // «Отклонить выбранные»: одна причина на все отмеченные
+    private async Task RejectSelected()
+    {
+        if (bulkReason.Trim() == "")
+        {
+            Say("Укажите причину отказа");
+            return;
+        }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Отклонить выбранные заявки ({selected.Count})? Новые регистрации будут удалены."))
+            return;
+
+        var done = 0;
+        foreach (var s in list!.Where(x => selected.Contains(x.Id)).ToList())
+        {
+            var resp = await SendReject(s, bulkReason);
+            if (resp.IsSuccessStatusCode)
+                done++;
+        }
+
+        Say($"Отклонено заявок: {done} из {selected.Count}");
+        selected.Clear();
+        bulkReason = "";
+        await Load();
+    }
+
+    // выбрали другой корпус — передать заявку туда
+    private async Task Move(int id, int officeId)
+    {
+        var s = list!.First(x => x.Id == id);
+        if (officeId == s.TargetOfficeId)
+            return;
+        var name = officeItems.First(o => o.Id == officeId).Name;
+        if (!await JS.InvokeAsync<bool>("confirm", $"Передать заявку {s.FullName} в корпус «{name}»? Она пропадёт из вашего списка."))
+            return;
+
+        var resp = await Http.PostAsJsonAsync($"api/requests/{id}/office", new { officeId });
+        Say(await resp.Content.ReadAsStringAsync());
         await Load();
     }
 

@@ -6,8 +6,9 @@ using Eqcos.Api.Services;
 
 namespace Eqcos.Api.Controllers;
 
-// новые данные студента: ФИО тремя полями, группа двумя частями ("204" + "Лг")
-public record ProfileUpdate(string? LastName, string? FirstName, string? MiddleName, string? GroupDigits, string? GroupCode);
+// новые данные студента: ФИО тремя полями, группа двумя частями ("204" + "Лг"), корпус и причина изменения
+public record ProfileUpdate(string? LastName, string? FirstName, string? MiddleName, string? GroupDigits, string? GroupCode,
+                            int OfficeId, string? Reason);
 
 [ApiController]
 [Route("api/profile")]
@@ -32,6 +33,7 @@ public class ProfileController : ControllerBase
             return NotFound("Пользователь не найден");
 
         var office = u.OfficeId == null ? null : _db.Offices.Find(u.OfficeId)?.Name;
+        var pendingOffice = u.PendingOfficeId == null ? null : _db.Offices.Find(u.PendingOfficeId)?.Name;
 
         return Ok(new
         {
@@ -44,11 +46,14 @@ public class ProfileController : ControllerBase
             u.Status,
             u.RejectReason,
             u.PendingFullName,
-            u.PendingGroup
+            u.PendingGroup,
+            u.PendingOfficeId,
+            PendingOffice = pendingOffice,
+            u.PendingReason
         });
     }
 
-    // СТУДЕНТ: изменить ФИО и группу
+    // СТУДЕНТ: изменить ФИО, группу и корпус
     [Authorize(Roles = "Student")]
     [HttpPut]
     public IActionResult Update(ProfileUpdate r)
@@ -63,33 +68,50 @@ public class ProfileController : ControllerBase
         if (error != null)
             return BadRequest(error);
 
+        var office = _db.Offices.Find(r.OfficeId);
+        if (office == null)
+            return BadRequest("Выберите корпус");
+
         var fullName = StudentData.JoinName(last, first, middle);
         var group = digits + code;
+        var reason = (r.Reason ?? "").Trim();
 
         var u = _db.Users.Find(CurrentUserId)!;
 
         if (u.Status == "Approved")
         {
             // вернул как было — заявку на изменение снимаем
-            if (u.FullName == fullName && u.Group == group)
+            if (u.FullName == fullName && u.Group == group && u.OfficeId == r.OfficeId)
             {
                 u.PendingFullName = null;
                 u.PendingGroup = null;
+                u.PendingOfficeId = null;
+                u.PendingReason = null;
                 _db.SaveChanges();
                 return Ok("Данные не изменились");
             }
 
-            // подтверждённый: старые данные продолжают действовать, новые — на проверку
+            if (reason == "")
+                return BadRequest("Укажите причину изменения");
+            if (reason.Length > 100)
+                return BadRequest("Причина слишком длинная");
+
+            // подтверждённый: старые данные продолжают действовать, новые — на проверку.
+            // Если меняется корпус, заявку увидит админ НОВОГО корпуса.
             u.PendingFullName = fullName;
             u.PendingGroup = group;
+            u.PendingOfficeId = r.OfficeId;
+            u.PendingReason = reason;
             _db.SaveChanges();
-            return Ok("Изменения отправлены на проверку в учебную часть. Пока действуют прежние данные.");
+            return Ok(u.OfficeId == r.OfficeId
+                ? "Изменения отправлены на проверку в учебную часть. Пока действуют прежние данные."
+                : $"Заявка на перевод отправлена в учебную часть ({office.Name}). Пока действуют прежние данные.");
         }
 
-        // ещё не подтверждён или отклонён: правим сразу и (снова) отправляем на проверку.
-        // Даже если данные те же — отклонённый может отправить их повторно (вдруг отклонили по ошибке).
+        // ещё не подтверждён: правим сразу (и корпус тоже — заявка уйдёт админу нового корпуса)
         u.FullName = fullName;
         u.Group = group;
+        u.OfficeId = r.OfficeId;
         u.Status = "Pending";
         u.RejectReason = null;
         _db.SaveChanges();

@@ -70,13 +70,16 @@ public class AuthController : ControllerBase
             FullName = StudentData.JoinName(last, first, middle),
             Group = digits + code,     // "204" + "Лг" = "204Лг"
             OfficeId = r.OfficeId,     // свой корпус: записываться можно только сюда
-            Role = "Student"
+            Role = "Student",
+            CreatedAt = DateTime.UtcNow   // через 2 недели без проверки заявка удалится сама
         };
         user.PasswordHash = _hasher.HashPassword(user, r.Password!); // пароль -> отпечаток
 
         user.Status = _verifier.Check(user);   // сразу подтвердить или ждать админа
 
         _db.Users.Add(user);
+        // зарегистрировался заново — старая причина отклонения больше не нужна
+        _db.RejectedAccounts.RemoveRange(_db.RejectedAccounts.Where(x => x.Login == login));
         _db.SaveChanges();
         return Ok(user.Status == "Approved"
             ? "Регистрация прошла успешно"
@@ -89,7 +92,7 @@ public class AuthController : ControllerBase
     {
         var user = _db.Users.FirstOrDefault(u => u.Login == r.Login);
         if (user == null)
-            return Unauthorized("Неверный логин или пароль");
+            return Unauthorized(RejectedText(r) ?? "Неверный логин или пароль");
 
         var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, r.Password);
         if (result == PasswordVerificationResult.Failed)
@@ -100,6 +103,29 @@ public class AuthController : ControllerBase
             return Unauthorized("Неверный логин или пароль");
         return Ok(new { token = CreateToken(user), role = user.Role, fullName = user.FullName });
     }
+    // учётку отклонили и стёрли: при верном пароле объясняем почему (30 дней).
+    // С неверным паролем — обычное «Неверный логин или пароль», чтобы чужой не узнал причину.
+    private string? RejectedText(LoginRequest r)
+    {
+        if (r.Staff)
+            return null;
+
+        var since = DateTime.UtcNow.AddDays(-Cleanup.RejectedDays);
+        var rej = _db.RejectedAccounts
+            .Where(x => x.Login == r.Login && x.RejectedAt > since)
+            .OrderByDescending(x => x.RejectedAt)
+            .FirstOrDefault();
+        if (rej == null)
+            return null;
+
+        // проверяем пароль по сохранённому отпечатку (сам User тут не нужен, подойдёт пустой)
+        if (_hasher.VerifyHashedPassword(new User(), rej.PasswordHash, r.Password) == PasswordVerificationResult.Failed)
+            return null;
+
+        return $"Регистрация отклонена учебной частью: {rej.Reason}. " +
+               "Номер студенческого свободен — зарегистрируйтесь заново с верными данными.";
+    }
+
     // смена пароля: для любого вошедшего (студент или админ)
     [Authorize]
     [HttpPost("password")]

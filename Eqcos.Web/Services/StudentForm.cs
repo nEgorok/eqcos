@@ -10,7 +10,8 @@ public class StudentForm
     public string MiddleName { get; set; } = "";   // отчество, необязательно
     public string GroupDigits { get; set; } = "";  // "204"
     public string GroupCode { get; set; } = "";    // "Лг"
-    public int OfficeId { get; set; }              // корпус (выбирается только при регистрации)
+    public int OfficeId { get; set; }              // корпус
+    public string Reason { get; set; } = "";       // причина изменения (только в профиле у подтверждённого)
 
     // " иВАНОВ-петров " -> "Иванов-Петров" (то же самое делает сервер)
     public static string Fix(string s)
@@ -20,9 +21,12 @@ public class StudentForm
             p.Length == 0 ? "" : char.ToUpper(p[0]) + p.Substring(1).ToLower()));
     }
 
-    // заполнить из того, что хранится на сервере: "Иванов Иван Иванович" и "204Лг"
-    public void Fill(string fullName, string group)
+    // заполнить из того, что хранится на сервере: "Иванов Иван Иванович", "204Лг" и корпус
+    public void Fill(string fullName, string group, int officeId)
     {
+        OfficeId = officeId;
+        Reason = "";
+
         var words = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         LastName = words.Length > 0 ? words[0] : "";
         FirstName = words.Length > 1 ? words[1] : "";
@@ -51,7 +55,8 @@ public class StudentForm
         middleName = MiddleName,
         groupDigits = GroupDigits,
         groupCode = GroupCode,
-        officeId = OfficeId
+        officeId = OfficeId,
+        reason = Reason
     };
 
     // быстрая проверка до отправки; null — можно отправлять
