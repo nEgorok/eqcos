@@ -1,0 +1,231 @@
+﻿@page "/admin/students/{Id:int}"
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Карточка студента</PageTitle>
+
+<a class="small" href="admin/students">← Все студенты</a>
+
+@if (Auth.Role != "Admin")
+{
+    <p>Нет доступа. Войдите как администратор.</p>
+}
+else if (error != null)
+{
+    <h1>Студент</h1>
+    <p>@error</p>
+}
+else if (card == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <h1 class="mt-2">@card.FullName</h1>
+
+    @if (message != null)
+    {
+        <div class="eq-toast">@message</div>
+    }
+
+    <div class="eq-card-grid">
+        @* ---- Данные ---- *@
+        <div>
+            <h5>Данные</h5>
+            @if (!editing)
+            {
+                <div class="eq-row"><span class="text-muted">Номер студенческого</span><span>@card.Login</span></div>
+                <div class="eq-row"><span class="text-muted">Группа</span><span>@card.Group</span></div>
+                <div class="eq-row"><span class="text-muted">Корпус</span><span>@card.Office</span></div>
+                <div class="eq-row"><span class="text-muted">Статус</span><span>@(card.Status == "Approved" ? "подтверждён" : "на проверке")</span></div>
+                <div class="eq-row"><span class="text-muted">Зарегистрирован</span><span>@(card.CreatedAt?.ToString("dd.MM.yyyy") ?? "—")</span></div>
+                @if (card.HasRequest)
+                {
+                    <div class="alert alert-warning py-2 mt-2 mb-0">Есть заявка на изменение данных — она во вкладке «Заявки».</div>
+                }
+                <button class="btn eq-btn eq-btn-blue mt-3" @onclick="StartEdit">Изменить</button>
+            }
+            else
+            {
+                <div class="eq-enter" style="max-width:420px">
+                    <StudentFields Form="form" ShowOffice="true" />
+                    <div class="form-text mt-0 mb-2">Изменения действуют сразу, студент получит уведомление</div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary eq-submit" @onclick="Save">Сохранить</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => editing = false">Отмена</button>
+                    </div>
+                </div>
+            }
+
+            @* ---- Итоги ---- *@
+            <h5 class="mt-4">Итоги</h5>
+            <div class="eq-row"><span class="text-muted">Пришёл</span><span>@card.Came</span></div>
+            <div class="eq-row"><span class="text-muted">Не пришёл</span><span>@card.NoShow</span></div>
+            <div class="eq-row"><span class="text-muted">Отменил сам</span><span>@card.Cancelled</span></div>
+
+            @* ---- Удалить ---- *@
+            <h5 class="mt-4 text-danger">Удалить учётную запись</h5>
+            <p class="small text-muted mb-2">Будущие записи освободятся. В истории записи останутся без ФИО.</p>
+            <div class="d-flex gap-2">
+                <input class="form-control form-control-sm" list="delete-reasons" placeholder="Причина удаления" @bind="deleteReason" />
+                <button class="btn btn-sm btn-outline-danger" @onclick="Delete">Удалить</button>
+            </div>
+            <datalist id="delete-reasons">
+                <option value="Отчислен"></option>
+                <option value="Выпуск"></option>
+                <option value="Ошибочная учётная запись"></option>
+            </datalist>
+        </div>
+
+        @* ---- История и журнал ---- *@
+        <div>
+            <h5>История записей</h5>
+            @if (card.History.Count == 0)
+            {
+                <p class="text-muted">Записей нет</p>
+            }
+            else
+            {
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Дата</th><th>Время</th><th>Цель</th><th>Итог</th></tr></thead>
+                    <tbody>
+                        @foreach (var b in card.History)
+                        {
+                            <tr>
+                                <td>@b.Date.ToString("dd.MM.yy")</td>
+                                <td>@b.Time.ToString("HH:mm")</td>
+                                <td>@(b.IsSummon ? "Вызов: " : "")@b.Purpose</td>
+                                <td>@Result(b)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <h5 class="mt-4">Журнал</h5>
+            @if (card.Log.Count == 0)
+            {
+                <p class="text-muted">Пусто</p>
+            }
+            @foreach (var l in card.Log)
+            {
+                <div class="eq-row">
+                    <span>@l.Text</span>
+                    <span class="small text-muted text-nowrap">@l.At.ToString("dd.MM HH:mm") · @l.Admin</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private record HistoryDto(DateOnly Date, TimeOnly Time, string Purpose, bool IsSummon,
+                              string Status, string? Note, bool Moved, string? FirstMark);
+    private record LogDto(DateTime At, string Admin, string Text);
+    private record CardDto(int Id, string Login, string FullName, string Group, int? OfficeId, string? Office,
+                           string Status, DateTime? CreatedAt, bool HasRequest,
+                           int Came, int NoShow, int Cancelled,
+                           List<HistoryDto> History, List<LogDto> Log);
+
+    private CardDto? card;
+    private string? error;
+    private string? message;
+    private bool editing;
+    private StudentForm form = new();
+    private string deleteReason = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.Role == "Admin")
+            await Load();
+    }
+
+    private async Task Load()
+    {
+        var resp = await Http.GetAsync($"api/students/{Id}");
+        if (!resp.IsSuccessStatusCode)
+        {
+            error = await resp.Content.ReadAsStringAsync();   // «Студент не найден»
+            return;
+        }
+        card = await resp.Content.ReadFromJsonAsync<CardDto>();
+    }
+
+    // итог записи по-русски: «Пришёл», «Отменена системой (причина), перенесена»
+    private static string Result(HistoryDto b)
+    {
+        var text = b.Status == "Active" ? "Ожидается" : BookingText.Word(b.Status);
+        if (b.Note != null)
+            text += $" ({b.Note})";
+        if (b.Moved)
+            text += ", перенесена";
+        if (b.FirstMark != null)
+            text += $", исправлено (было: {BookingText.Word(b.FirstMark)})";
+        return text;
+    }
+
+    private void StartEdit()
+    {
+        form.Fill(card!.FullName, card.Group, card.OfficeId ?? 0);
+        editing = true;
+    }
+
+    private async Task Save()
+    {
+        var problem = form.Check(needOffice: true);
+        if (problem != null)
+        {
+            Say(problem);
+            return;
+        }
+
+        var resp = await Http.PutAsJsonAsync($"api/students/{Id}", form.ToJson());
+        Say(await resp.Content.ReadAsStringAsync());
+        if (!resp.IsSuccessStatusCode)
+            return;
+
+        editing = false;
+        // перевели в другой корпус — карточка больше не наша, возвращаемся к списку
+        if (form.OfficeId != card!.OfficeId)
+            Nav.NavigateTo("admin/students");
+        else
+            await Load();
+    }
+
+    private async Task Delete()
+    {
+        if (deleteReason.Trim() == "")
+        {
+            Say("Укажите причину удаления");
+            return;
+        }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Удалить учётную запись {card!.FullName}? Восстановить нельзя."))
+            return;
+
+        var resp = await Http.PostAsJsonAsync($"api/students/{Id}/delete", new { reason = deleteReason });
+        Say(await resp.Content.ReadAsStringAsync());
+        if (resp.IsSuccessStatusCode)
+            Nav.NavigateTo("admin/students");
+    }
+
+    // показать сообщение и убрать его через 5 секунд
+    private void Say(string text)
+    {
+        message = text;
+        _ = HideLater(text);
+    }
+
+    private async Task HideLater(string text)
+    {
+        await Task.Delay(5000);
+        if (message == text)
+        {
+            message = null;
+            StateHasChanged();
+        }
+    }
+}

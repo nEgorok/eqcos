@@ -545,3 +545,24 @@ h2 {
             white-space: nowrap;
         }
 }
+/* ===== Студенты: строки таблицы кликабельны, карточка в две колонки ===== */
+.eq-click-rows tbody tr {
+    cursor: pointer;
+}
+
+    .eq-click-rows tbody tr:hover td {
+        background: var(--eq-head);
+    }
+
+.eq-card-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 420px) 1fr;
+    gap: 2.5rem;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .eq-card-grid {
+        grid-template-columns: 1fr;
+    }
+}

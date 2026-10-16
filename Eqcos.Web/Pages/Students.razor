@@ -1,0 +1,84 @@
+﻿@page "/admin/students"
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Студенты</PageTitle>
+<h1>Студенты</h1>
+
+@if (Auth.Role != "Admin")
+{
+    <p>Нет доступа. Войдите как администратор.</p>
+}
+else
+{
+    @* ---- Поиск: применяется сразу, с небольшой задержкой ---- *@
+    <div class="mb-3" style="max-width:360px">
+        <input class="form-control" placeholder="Номер, ФИО или группа"
+               @bind="search" @bind:event="oninput" @bind:after="SearchChanged" />
+    </div>
+
+    @if (rows == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (rows.Count == 0)
+    {
+        <p>Никого не нашлось</p>
+    }
+    else
+    {
+        <table class="table align-middle eq-click-rows">
+            <thead>
+                <tr><th>Группа</th><th>ФИО</th><th>Студенческий</th><th>Статус</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var s in rows)
+                {
+                    @* щелчок по строке — открыть карточку *@
+                    <tr @onclick='() => Nav.NavigateTo($"admin/students/{s.Id}")'>
+                        <td>@s.Group</td>
+                        <td>@s.FullName</td>
+                        <td>@s.Login</td>
+                        <td>@(s.Status == "Approved" ? "подтверждён" : "на проверке")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private record StudentRow(int Id, string Login, string FullName, string Group, string Status);
+
+    private List<StudentRow>? rows;
+    private string search = "";
+    private CancellationTokenSource? searchDelay;   // чтобы не искать на каждую букву
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.Role == "Admin")
+            await Load();
+    }
+
+    private async Task Load()
+    {
+        rows = await Http.GetFromJsonAsync<List<StudentRow>>($"api/students?q={Uri.EscapeDataString(search)}");
+    }
+
+    // ввели букву — ждём 400 мс; если за это время ввели ещё, предыдущий поиск отменяется
+    private async Task SearchChanged()
+    {
+        searchDelay?.Cancel();
+        searchDelay = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(400, searchDelay.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        await Load();
+    }
+}
