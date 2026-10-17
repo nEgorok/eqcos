@@ -16,7 +16,8 @@ public class AuthService
     public string? Token { get; private set; }
     public string? Role { get; private set; }
     public string? FullName { get; private set; }
-    public bool HasEmail { get; private set; }   // привязана ли почта (нет — напоминаем)
+    public bool HasEmail { get; private set; }   // привязана ли почта или телефон (нет — напоминаем)
+    public bool SmsEnabled { get; private set; } // включены ли SMS на сервере (нет — телефон нигде не показываем)
     public bool IsLoggedIn => Token != null;
 
     public event Action? Changed;
@@ -30,6 +31,16 @@ public class AuthService
     // при запуске сайта: достать пропуск из sessionStorage, если он там есть
     public async Task Restore()
     {
+        // включены ли SMS — спрашиваем сервер при каждом запуске сайта (вход для этого не нужен)
+        try
+        {
+            SmsEnabled = await _http.GetFromJsonAsync<bool>("api/phone/enabled");
+        }
+        catch
+        {
+            SmsEnabled = false;   // сервер недоступен — считаем, что SMS нет
+        }
+
         var token = await _js.InvokeAsync<string?>("sessionStorage.getItem", "token");
         if (token == null)
             return;

@@ -108,6 +108,7 @@ public class StudentsController : ControllerBase
             Office = _db.Offices.Find(u.OfficeId)?.Name,
             u.Status,
             Email = EmailCodes.Mask(u.Email),   // скрыто; null — почта не привязана
+            Phone = Phones.Mask(u.Phone),       // скрыто; null — телефон не привязан
             CreatedAt = u.CreatedAt == null ? (DateTime?)null : Clock.ToMsk(u.CreatedAt.Value),
             HasRequest = u.PendingFullName != null || u.PendingGroup != null || u.PendingOfficeId != null,
             // итоги по своим записям (вызовы не считаем)

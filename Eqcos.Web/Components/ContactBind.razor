@@ -1,0 +1,98 @@
+﻿
+@* привязка или смена почты (Phone = false) или телефона (Phone = true): адрес/номер → код → готово.
+   Используется в окне после регистрации (/welcome) и в профиле («Настройки аккаунта») *@
+@inject HttpClient Http
+@inject AuthService Auth
+
+<div class="eq-enter">
+    @if (!sent)
+    {
+        @if (Phone)
+        {
+            <input class="form-control mb-2" type="tel" placeholder="Телефон, например +7 999 123-45-67" @bind="value" />
+        }
+        else
+        {
+            <input class="form-control mb-2" type="email" placeholder="Почта, например ivanov@mail.ru" @bind="value" />
+        }
+        @if (NeedPassword)
+        {
+            @* смена уже привязанной почты или номера — только с текущим паролем *@
+            <PasswordInput Class="mb-2" Placeholder="Текущий пароль" @bind-Value="password" />
+        }
+        <button class="btn btn-primary eq-submit @(Wide ? "w-100" : "")" @onclick="SendCode">
+            @(Phone ? "Отправить код по SMS" : "Отправить код")
+        </button>
+    }
+    else
+    {
+        <div class="small mb-2">@info</div>
+        <input class="form-control mb-2" placeholder="@(Phone ? "Код из SMS" : "Код из письма")" inputmode="numeric" maxlength="6" @bind="code" />
+        <button class="btn btn-primary eq-submit @(Wide ? "w-100" : "")" @onclick="ConfirmCode">Подтвердить</button>
+        <div class="mt-2">
+            <button class="btn btn-link btn-sm p-0" @onclick="Back">@(Phone ? "Другой номер или новый код" : "Другой адрес или новый код")</button>
+        </div>
+    }
+
+    @if (error != null)
+    {
+        <div class="text-danger mt-2">@error</div>
+    }
+</div>
+
+@code {
+    [Parameter] public bool Phone { get; set; }                     // true — телефон (код по SMS), false — почта
+    [Parameter] public bool NeedPassword { get; set; }              // true — уже привязано, это смена
+    [Parameter] public bool Wide { get; set; }                      // кнопки во всю ширину (окно после регистрации)
+    [Parameter] public EventCallback<string> OnDone { get; set; }   // привязано — сообщаем странице текст сервера
+
+    private string value = "";      // адрес почты или номер телефона
+    private string password = "";
+    private string code = "";
+    private bool sent;        // код отправлен — показываем поле для кода
+    private string? info;     // «Код отправлен на i***@mail.ru»
+    private string? error;
+
+    // куда стучаться на сервере: api/email/... или api/phone/...
+    private string Api => Phone ? "api/phone" : "api/email";
+
+    private async Task SendCode()
+    {
+        error = null;
+        // сервер ждёт поле email или phone — отправляем оба, лишнее он не читает
+        var resp = await Http.PostAsJsonAsync($"{Api}/send", new { email = value, phone = value, password });
+        var text = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
+        {
+            error = text;   // «Неверный пароль», «уже привязан к другой учётной записи», «слишком много…»
+            return;
+        }
+        info = text;
+        code = "";
+        sent = true;
+    }
+
+    private async Task ConfirmCode()
+    {
+        error = null;
+        var resp = await Http.PostAsJsonAsync($"{Api}/confirm", new { code });
+        var text = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
+        {
+            error = text;   // «Неверный код. Осталось попыток: 4»
+            return;
+        }
+
+        await Auth.SetHasEmail();   // есть чем сбросить пароль — убрать напоминания в шапке и на главной
+        sent = false;
+        value = password = code = "";
+        await OnDone.InvokeAsync(text);
+    }
+
+    // вернуться к вводу адреса/номера (он остаётся в поле — можно исправить или отправить код ещё раз)
+    private void Back()
+    {
+        sent = false;
+        error = null;
+    }
+}

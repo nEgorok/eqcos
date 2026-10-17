@@ -10,7 +10,7 @@ namespace Eqcos.Api.Controllers;
 
 public record EmailSendRequest(string? Email, string? Password);   // пароль нужен только при СМЕНЕ почты
 public record EmailConfirmRequest(string? Code);
-public record ResetSendRequest(string? Login, bool Staff = false);
+public record ResetSendRequest(string? Login, bool Staff = false, bool Sms = false);   // Sms — код по SMS, а не на почту
 public record ResetConfirmRequest(string? Login, string? Code, string? NewPassword, bool Staff = false);
 
 // почта: привязка с кодом, смена, сброс пароля по коду
@@ -20,12 +20,14 @@ public class EmailController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly Mailer _mailer;
+    private readonly SmsSender _sms;
     private readonly PasswordHasher<User> _hasher = new();
 
-    public EmailController(AppDbContext db, Mailer mailer)
+    public EmailController(AppDbContext db, Mailer mailer, SmsSender sms)
     {
         _db = db;
         _mailer = mailer;
+        _sms = sms;
     }
 
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -97,17 +99,52 @@ public class EmailController : ControllerBase
         return Ok(old == null ? "Почта привязана" : "Почта изменена");
     }
 
-    // СБРОС ПАРОЛЯ: шаг 1 — код на привязанную почту (без входа)
+    // СБРОС ПАРОЛЯ: шаг 0 — куда можно отправить код (скрыто): почта и/или телефон
+    [HttpPost("reset/ways")]
+    public IActionResult ResetWays(ResetSendRequest r)
+    {
+        var u = FindForReset(r.Login, r.Staff);
+        if (u == null)
+            return BadRequest(r.Staff ? "Учётная запись не найдена" : "Такой номер студенческого не зарегистрирован");
+
+        var phone = _sms.Enabled ? Phones.Mask(u.Phone) : null;   // SMS выключены — про телефон молчим
+        if (u.Email == null && phone == null)
+            return BadRequest(_sms.Enabled
+                ? "К этой учётной записи не привязаны ни почта, ни телефон. Сбросить пароль может учебная часть"
+                : "К этой учётной записи не привязана почта. Сбросить пароль может учебная часть");
+
+        return Ok(new { Email = EmailCodes.Mask(u.Email), Phone = phone });
+    }
+
+    // СБРОС ПАРОЛЯ: шаг 1 — код на привязанную почту или по SMS (без входа)
     [HttpPost("reset/send")]
     public async Task<IActionResult> ResetSend(ResetSendRequest r)
     {
         var u = FindForReset(r.Login, r.Staff);
         if (u == null)
             return BadRequest(r.Staff ? "Учётная запись не найдена" : "Такой номер студенческого не зарегистрирован");
-        if (u.Email == null)
-            return BadRequest("К этой учётной записи не привязана почта. Сбросить пароль может учебная часть");
 
         var limit = EmailCodes.Limit(_db, u.Id);
+
+        // по SMS
+        if (r.Sms)
+        {
+            if (!_sms.Enabled || u.Phone == null)
+                return BadRequest("К этой учётной записи не привязан телефон");
+            if (limit != null)
+                return BadRequest(limit.Replace("писем", "кодов"));
+
+            var smsCode = EmailCodes.New(_db, u.Id, EmailCodes.Reset, u.Phone);
+            if (!await _sms.Send(u.Phone, $"Код для сброса пароля: {smsCode}. Электронная очередь КГАМТ"))
+                return BadRequest("Не удалось отправить SMS. Попробуйте позже");
+
+            _db.SaveChanges();
+            return Ok($"Код отправлен на {Phones.Mask(u.Phone)}. Он действует {EmailCodes.Minutes} минут");
+        }
+
+        // на почту
+        if (u.Email == null)
+            return BadRequest("К этой учётной записи не привязана почта. Сбросить пароль может учебная часть");
         if (limit != null)
             return BadRequest(limit);
 
@@ -144,7 +181,8 @@ public class EmailController : ControllerBase
         u.TempPassword = null;
         _db.SaveChanges();
 
-        await _mailer.Send(u.Email!, "Пароль изменён", "Пароль от вашей учётной записи в электронной очереди сброшен по коду из письма.");
+        if (u.Email != null)
+            await _mailer.Send(u.Email, "Пароль изменён", "Пароль от вашей учётной записи в электронной очереди сброшен по коду.");
         return Ok("Пароль изменён. Войдите с новым паролем");
     }
 

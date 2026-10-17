@@ -553,6 +553,9 @@ namespace Eqcos.Api.Migrations
                     b.Property<string>("PendingReason")
                         .HasColumnType("text");
 
+                    b.Property<string>("Phone")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("PunishFrom")
                         .HasColumnType("timestamp with time zone");
 

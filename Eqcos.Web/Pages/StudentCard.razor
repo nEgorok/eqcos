@@ -41,6 +41,10 @@ else
                 <div class="eq-row"><span class="text-muted">Корпус</span><span>@card.Office</span></div>
                 <div class="eq-row"><span class="text-muted">Статус</span><span>@(card.Status == "Approved" ? "подтверждён" : "на проверке")</span></div>
                 <div class="eq-row"><span class="text-muted">Почта</span><span>@(card.Email ?? "не привязана")</span></div>
+                @if (card.Phone != null)
+                {
+                    <div class="eq-row"><span class="text-muted">Телефон</span><span>@card.Phone</span></div>
+                }
                 <div class="eq-row"><span class="text-muted">Зарегистрирован</span><span>@(card.CreatedAt?.ToString("dd.MM.yyyy") ?? "—")</span></div>
                 @if (card.HasRequest)
                 {
@@ -221,7 +225,7 @@ else
                               int Requests, int DataLimit, int DataWarnings, int DataBlockAt, DateTime? DataUntil,
                               bool Blocked, List<EventDto> Events);
     private record CardDto(int Id, string Login, string FullName, string Group, int? OfficeId, string? Office,
-                           string Status, string? Email, DateTime? CreatedAt, bool HasRequest,
+                                string Status, string? Email, string? Phone, DateTime? CreatedAt, bool HasRequest,
                            int Came, int NoShow, int Cancelled,
                            List<HistoryDto> History, List<LogDto> Log, ConductDto Conduct);
 

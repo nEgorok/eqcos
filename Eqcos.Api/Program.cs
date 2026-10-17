@@ -35,6 +35,8 @@ builder.Services.AddScoped<Eqcos.Api.Services.IStudentVerifier, Eqcos.Api.Servic
 builder.Services.AddHostedService<Eqcos.Api.Services.Cleanup>();
 // письма (коды подтверждения, «пароль изменён»)
 builder.Services.AddSingleton<Eqcos.Api.Services.Mailer>();
+// SMS (выключатель "Sms:Enabled" в appsettings.json)
+builder.Services.AddSingleton<Eqcos.Api.Services.SmsSender>();
 // разрешаем сайту обращаться к API
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));

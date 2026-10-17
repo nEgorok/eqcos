@@ -2,7 +2,7 @@
 @inject HttpClient Http
 @inject NavigationManager Nav
 
-@* «Забыли пароль?»: номер студенческого (или логин сотрудника) → код на почту → новый пароль *@
+@* «Забыли пароль?»: номер студенческого (или логин сотрудника) → куда прислать код → код + новый пароль *@
 <PageTitle>Сброс пароля</PageTitle>
 
 <div class="eq-auth">
@@ -10,20 +10,38 @@
         <div class="card-body eq-enter">
             <h1 class="eq-auth-title">Сброс пароля</h1>
 
-            @if (!sent)
+            @if (ways == null)
             {
+                @* шаг 1: чья учётка *@
                 <input class="form-control mb-2" placeholder="@(IsStaff ? "Логин" : "Номер студенческого")" @bind="login" />
-                <button class="btn btn-primary w-100 eq-submit" @onclick="SendCode">Отправить код на почту</button>
+                <button class="btn btn-primary w-100 eq-submit" @onclick="FindWays">Далее</button>
+            }
+            else if (!sent)
+            {
+                @* шаг 2: куда прислать код — только то, что привязано *@
+                <p class="small mb-2">Куда прислать код?</p>
+                @if (ways.Email != null)
+                {
+                    <button class="btn btn-primary w-100 mb-2" @onclick="() => SendCode(false)">На почту @ways.Email</button>
+                }
+                @if (ways.Phone != null)
+                {
+                    <button class="btn btn-primary w-100 mb-2" @onclick="() => SendCode(true)">По SMS на @ways.Phone</button>
+                }
+                <div class="text-center">
+                    <button class="btn btn-link btn-sm p-0" @onclick="() => ways = null">Другая учётная запись</button>
+                </div>
             }
             else
             {
+                @* шаг 3: код и новый пароль *@
                 <div class="small mb-2">@info</div>
-                <input class="form-control mb-2" placeholder="Код из письма" inputmode="numeric" maxlength="6" @bind="code" />
+                <input class="form-control mb-2" placeholder="Код" inputmode="numeric" maxlength="6" @bind="code" />
                 <PasswordInput Class="mb-2" Placeholder="Новый пароль (не короче 6 символов)" @bind-Value="newPassword" />
                 <PasswordInput Class="mb-3" Placeholder="Повторите новый пароль" @bind-Value="repeat" />
                 <button class="btn btn-primary w-100 eq-submit" @onclick="Confirm">Сменить пароль</button>
                 <div class="text-center mt-2">
-                    <button class="btn btn-link btn-sm p-0" @onclick="SendCode">Отправить код ещё раз</button>
+                    <button class="btn btn-link btn-sm p-0" @onclick="() => sent = false">Отправить код ещё раз</button>
                 </div>
             }
 
@@ -44,15 +62,20 @@
     [SupplyParameterFromQuery(Name = "staff")] public int StaffFlag { get; set; }
     private bool IsStaff => StaffFlag == 1;
 
+    // куда можно прислать код (скрыто); null — способа нет
+    private record WaysDto(string? Email, string? Phone);
+
     private string login = "";
     private string code = "";
     private string newPassword = "";
     private string repeat = "";
+    private WaysDto? ways;   // null — ещё не нашли учётку (шаг 1)
     private bool sent;       // код отправлен — показываем поля для кода и нового пароля
     private string? info;    // «Код отправлен на i***@mail.ru»
     private string? error;
 
-    private async Task SendCode()
+    // шаг 1 → 2: узнать, что привязано к учётке
+    private async Task FindWays()
     {
         error = null;
         if (login.Trim() == "")
@@ -61,11 +84,24 @@
             return;
         }
 
-        var resp = await Http.PostAsJsonAsync("api/email/reset/send", new { login, staff = IsStaff });
+        var resp = await Http.PostAsJsonAsync("api/email/reset/ways", new { login, staff = IsStaff });
+        if (!resp.IsSuccessStatusCode)
+        {
+            error = await resp.Content.ReadAsStringAsync();   // «не привязаны ни почта, ни телефон»
+            return;
+        }
+        ways = await resp.Content.ReadFromJsonAsync<WaysDto>();
+    }
+
+    // шаг 2 → 3: отправить код на почту (sms = false) или по SMS (sms = true)
+    private async Task SendCode(bool sms)
+    {
+        error = null;
+        var resp = await Http.PostAsJsonAsync("api/email/reset/send", new { login, staff = IsStaff, sms });
         var text = await resp.Content.ReadAsStringAsync();
         if (!resp.IsSuccessStatusCode)
         {
-            error = text;   // «не привязана почта», «слишком много писем»
+            error = text;   // «слишком много писем»
             return;
         }
         info = text;

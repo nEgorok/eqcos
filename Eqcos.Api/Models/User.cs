@@ -35,4 +35,5 @@ public class User
     public string? Email { get; set; }            // привязанная почта (маленькими буквами); null — не привязана
     public int TokenVersion { get; set; }         // «версия входа»: +1 при смене пароля — старые пропуска перестают работать
     public string? TempPassword { get; set; }     // временный пароль от учебной части (открытым текстом, пока студент его не сменит)
+    public string? Phone { get; set; }            // привязанный телефон, 11 цифр: 79991234567 (только если SMS включены)
 }

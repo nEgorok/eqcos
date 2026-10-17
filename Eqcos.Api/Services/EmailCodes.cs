@@ -14,6 +14,7 @@ public static class EmailCodes
     public const int PerHour = 5;      // писем с кодом в час на одну учётку
 
     public const string Bind = "bind";    // привязать или сменить почту
+    public const string Phone = "phone";  // привязать или сменить телефон (код по SMS)
     public const string Reset = "reset";  // сбросить пароль
 
     // "ivanov@mail.ru" → "i***@mail.ru" (чтобы чужой не узнал адрес целиком)

@@ -6,8 +6,8 @@ public class EmailCode
 {
     public int Id { get; set; }
     public int UserId { get; set; }
-    public string Purpose { get; set; } = "";   // "bind" — привязать/сменить почту, "reset" — сбросить пароль
-    public string Email { get; set; } = "";     // куда отправили код
+    public string Purpose { get; set; } = "";   // "bind" — почта, "phone" — телефон, "reset" — сбросить пароль
+    public string Email { get; set; } = "";     // куда отправили код: адрес почты или номер телефона
     public string CodeHash { get; set; } = "";  // отпечаток кода
     public int Attempts { get; set; }           // сколько раз ввели неверно
     public bool Used { get; set; }              // код уже сработал или его заменил новый

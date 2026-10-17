@@ -106,8 +106,8 @@ public class AuthController : ControllerBase
         // заблокирована за подозрительные действия — говорим только при верном пароле
         if (user.Blocked)
             return Unauthorized("Учётная запись заблокирована из-за подозрительных действий. Обратитесь в учебную часть.");
-        // hasEmail: без почты сайт напомнит её привязать
-        return Ok(new { token = CreateToken(user), role = user.Role, fullName = user.FullName, hasEmail = user.Email != null });
+        // hasEmail: есть ли чем сбросить пароль (почта или телефон); нет — сайт напомнит привязать
+        return Ok(new { token = CreateToken(user), role = user.Role, fullName = user.FullName, hasEmail = user.Email != null || user.Phone != null });
     }
     // учётку отклонили и стёрли: при верном пароле объясняем почему (30 дней).
     // С неверным паролем — обычное «Неверный логин или пароль», чтобы чужой не узнал причину.

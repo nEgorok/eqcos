@@ -2,29 +2,46 @@
 @inject AuthService Auth
 @inject NavigationManager Nav
 
-@* окно сразу после регистрации: предлагаем привязать почту, можно пропустить *@
-<PageTitle>Привяжите почту</PageTitle>
+@* окно сразу после регистрации: предлагаем привязать почту (или телефон, если SMS включены), можно пропустить *@
+<PageTitle>@Title</PageTitle>
 
 <div class="eq-auth">
     <div class="card eq-auth-card">
         <div class="card-body">
-            <h1 class="eq-auth-title">Привяжите почту</h1>
-            <p class="small">Если забудете пароль, на почту придёт код для его сброса.</p>
+            <h1 class="eq-auth-title">@Title</h1>
 
-            <EmailBind Wide="true" OnDone="Done" />
+            @if (Auth.SmsEnabled)
+            {
+                @* выбор: почта или телефон (в профиле потом можно привязать и то, и другое) *@
+                <div class="eq-auth-tabs">
+                    <button class="@(phone ? "" : "active")" @onclick="() => phone = false">Почта</button>
+                    <button class="@(phone ? "active" : "")" @onclick="() => phone = true">Телефон</button>
+                </div>
+            }
+
+            <p class="small">
+                Если забудете пароль, @(phone ? "по SMS" : "на почту") придёт код для его сброса.
+            </p>
+
+            @* @key: при переключении вкладки поле очищается (это новый компонент) *@
+            <ContactBind @key="phone" Phone="phone" Wide="true" OnDone="Done" />
 
             <div class="text-center mt-3">
                 <a href="">Пропустить</a>
             </div>
             <div class="small text-muted text-center mt-1">
-                Без почты сброс пароля недоступен, только через учебную часть.
-                Привязать почту можно позже в профиле.
+                Без @(Auth.SmsEnabled ? "почты или телефона" : "почты") сброс пароля недоступен, только через учебную часть.
+                Привязать можно позже в профиле.
             </div>
         </div>
     </div>
 </div>
 
 @code {
+    private bool phone;   // выбрана вкладка «Телефон»
+
+    private string Title => Auth.SmsEnabled ? "Привяжите почту или телефон" : "Привяжите почту";
+
     protected override void OnInitialized()
     {
         if (!Auth.IsLoggedIn)
