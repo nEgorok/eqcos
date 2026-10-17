@@ -43,8 +43,8 @@ public class AuthController : ControllerBase
     {
         // номер студенческого — только цифры (так студент не займёт логин вроде admin_kpk)
         var login = (r.Login ?? "").Trim();
-        if (login == "" || !login.All(char.IsDigit))
-            return BadRequest("Номер студенческого должен состоять только из цифр");
+        if (login.Length != 4 || !login.All(char.IsDigit))
+            return BadRequest("Номер студенческого — 4 цифры");
         if ((r.Password ?? "").Length < 6)
             return BadRequest("Пароль должен быть не короче 6 символов");
 
@@ -155,6 +155,7 @@ public class AuthController : ControllerBase
 
         user.PasswordHash = _hasher.HashPassword(user, r.NewPassword);   // новый отпечаток
         user.TokenVersion++;   // на других устройствах вход закроется
+        user.TempPassword = null;   // сменил временный пароль — больше его не показываем
         _db.SaveChanges();
 
         if (user.Email != null)

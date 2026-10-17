@@ -55,6 +55,8 @@ public class ProfileController : ControllerBase
             PendingOffice = pendingOffice,
             u.PendingReason,
             Email = EmailCodes.Mask(u.Email),        // почта скрыто: i***@mail.ru (null — не привязана)
+            EmailFull = u.Email,                     // полностью — по глазику (профиль видит только сам владелец)
+            u.TempPassword,                          // временный пароль от учебной части (null — нет)
             // «Доступ к записи» (так студент видит порядочность; слово «уровень» ему не показываем)
             Access = u.Level,                        // ступень 0–6 для шкалы
             AccessName = Conduct.AccessNames[u.Level],

@@ -576,6 +576,9 @@ namespace Eqcos.Api.Migrations
                     b.Property<DateTime?>("StrikesFrom")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("TempPassword")
+                        .HasColumnType("text");
+
                     b.Property<int>("TokenVersion")
                         .HasColumnType("integer");
 

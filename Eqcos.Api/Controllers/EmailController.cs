@@ -141,6 +141,7 @@ public class EmailController : ControllerBase
 
         u.PasswordHash = _hasher.HashPassword(u, password);
         u.TokenVersion++;   // все старые входы (на других устройствах) закрываются
+        u.TempPassword = null;
         _db.SaveChanges();
 
         await _mailer.Send(u.Email!, "Пароль изменён", "Пароль от вашей учётной записи в электронной очереди сброшен по коду из письма.");

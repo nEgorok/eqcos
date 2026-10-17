@@ -208,13 +208,14 @@ public class StudentsController : ControllerBase
         var password = RandomNumberGenerator.GetInt32(10_000_000, 100_000_000).ToString();   // 8 цифр
         u.PasswordHash = new PasswordHasher<User>().HashPassword(u, password);
         u.TokenVersion++;   // старые входы студента закрываются
+        u.TempPassword = password;   // студент увидит его в профиле, пока не сменит
         Log(u.Id, "Пароль сброшен учебной частью");
         _db.SaveChanges();
 
         if (u.Email != null)
             await _mailer.Send(u.Email, "Пароль сброшен", "Учебная часть сбросила пароль от вашей учётной записи в электронной очереди.");
 
-        return Ok($"Новый пароль: {password}\nПродиктуйте его студенту. После входа пусть сменит его в профиле («Настройки аккаунта»).");
+        return Ok(password);   // сайт покажет его плашкой в карточке
     }
 
     // ПОНИЗИТЬ УРОВЕНЬ на ступень

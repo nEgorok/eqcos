@@ -11,7 +11,7 @@ public static class EmailCodes
 {
     public const int Minutes = 15;     // сколько живёт код
     public const int MaxAttempts = 5;  // неверных попыток на один код
-    public const int PerHour = 3;      // писем с кодом в час на одну учётку
+    public const int PerHour = 5;      // писем с кодом в час на одну учётку
 
     public const string Bind = "bind";    // привязать или сменить почту
     public const string Reset = "reset";  // сбросить пароль

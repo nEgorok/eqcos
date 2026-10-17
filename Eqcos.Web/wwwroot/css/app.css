@@ -654,3 +654,45 @@ h2 {
     .eq-noemail:hover {
         text-decoration: underline;
     }
+/* ===== Шаг 25, правки ===== */
+/* глазик у почты в профиле */
+.eq-eye-inline {
+    border: none;
+    background: transparent;
+    padding: 0 0 0 0.4rem;
+    cursor: pointer;
+}
+
+/* временный пароль: крупно, чтобы удобно диктовать */
+.eq-temp-pass {
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    color: var(--eq-ink);
+    background: #fff;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+}
+/* подпись часа слева от кнопок: одинаковая ширина, чтобы кнопки начинались ровно */
+.eq-hour {
+    display: inline-block;
+    width: 3.5rem;
+    font-variant-numeric: tabular-nums;
+}
+/* кнопка-значок «копировать» (как у кода в чате) */
+.eq-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #c9ced6;
+    border-radius: 8px;
+    background: #fff;
+    color: var(--eq-ink);
+    cursor: pointer;
+}
+
+    .eq-copy:hover {
+        border-color: var(--eq-blue);
+        color: var(--eq-blue);
+    }

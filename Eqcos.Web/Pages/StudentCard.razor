@@ -50,6 +50,12 @@ else
                     <button class="btn eq-btn eq-btn-blue" @onclick="StartEdit">Изменить</button>
                     <button class="btn btn-outline-secondary" @onclick="ResetPassword">Сбросить пароль</button>
                 </div>
+                @if (tempPassword != null)
+                {
+                    <div class="alert alert-warning py-2 mt-2 mb-0">
+                        Новый пароль студента: <code class="eq-temp-pass">@tempPassword</code>
+                    </div>
+                }
             }
             else
             {
@@ -225,6 +231,7 @@ else
     private bool editing;
     private StudentForm form = new();
     private string deleteReason = "";
+    private string? tempPassword;   // пароль после «Сбросить пароль»
 
     protected override async Task OnInitializedAsync()
     {
@@ -312,13 +319,19 @@ else
         await Load();
     }
 
-    // «Сбросить пароль»: новый пароль показываем в окне (не во всплывашке — она исчезнет через 5 секунд)
+    // «Сбросить пароль»: новый пароль показываем плашкой в карточке (окно с «ОК» легко закрыть случайно)
     private async Task ResetPassword()
     {
         if (!await JS.InvokeAsync<bool>("confirm", $"Сбросить пароль {card!.FullName}? Студента выкинет со всех устройств."))
             return;
         var resp = await Http.PostAsync($"api/students/{Id}/password", null);
-        await JS.InvokeVoidAsync("alert", await resp.Content.ReadAsStringAsync());
+        var text = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
+        {
+            Say(text);
+            return;
+        }
+        tempPassword = text;   // плашка с паролем под кнопками
         await Load();
     }
 

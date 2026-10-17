@@ -39,6 +39,12 @@
         Исправьте данные в <a href="profile?tab=data">профиле</a>, и они снова уйдут на проверку.
     </div>
 }
+@if (me?.TempPassword != null)
+{
+    <div class="alert alert-warning">
+        Вам выдан временный пароль. <a href="profile?tab=settings">Смените его</a> на свой.
+    </div>
+}
 @if (Auth.IsLoggedIn && Auth.Role == "Student" && !Auth.HasEmail)
 {
     @* почта не привязана: напоминаем, пока не привяжет *@
@@ -134,7 +140,7 @@ else
     @foreach (var hour in slots.GroupBy(s => s.Substring(0, 2)))
     {
         <div class="mb-2">
-            <strong class="me-2">@(hour.Key):00</strong>
+            <strong class="me-2 eq-hour">@(hour.Key):00</strong>
             @foreach (var s in hour)
             {
                 <button class="btn btn-sm btn-outline-primary m-1" disabled="@(me?.BookBlock != null)" @onclick="() => Book(s)">@s</button>
@@ -148,10 +154,10 @@ else
     private record PurposeDto(int Id, string Name, int Minutes);
     private record NotificationDto(int Id, string Text, bool CanChange);
     private record StatusDto(string Status, int? OfficeId, string? RejectReason, string? PendingFullName, string? PendingGroup,
-                             string? BookBlock,       // почему нельзя записаться (бан и т.п.); null — можно
-                             List<string>? Warnings); // действующие предупреждения (жёлтые плашки)
+        string? BookBlock,       // почему нельзя записаться (бан и т.п.); null — можно
+            List<string>? Warnings,  // действующие предупреждения (жёлтые плашки)
+        string? TempPassword);   // выдан временный пароль — напомнить сменить
     private StatusDto? me;   // статус моей учётной записи
-
     private List<OfficeDto>? offices;
     private List<PurposeDto>? purposes;
     private int officeId = 1;

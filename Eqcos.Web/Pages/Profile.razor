@@ -165,7 +165,20 @@ else
                 @* ---- Почта ---- *@
                 <h5>Почта</h5>
                 <div style="max-width:420px">
-                    <div class="eq-row"><span class="text-muted">Привязана</span><span>@(profile.Email ?? "нет")</span></div>
+                    <div class="eq-row">
+                        <span class="text-muted">Привязана</span>
+                        <span>
+                            @(profile.Email == null ? "нет" : showEmail ? profile.EmailFull : profile.Email)
+                            @if (profile.Email != null)
+                            {
+                                @* глазик: полный адрес / скрытый *@
+                                <button type="button" class="eq-eye-inline" title="@(showEmail ? "Скрыть" : "Показать полностью")"
+                                        @onclick="() => showEmail = !showEmail">
+                                    @(showEmail ? "🙈" : "👁")
+                                </button>
+                            }
+                        </span>
+                    </div>
                     @if (profile.Email == null)
                     {
                         <div class="small text-muted mb-2">Без почты сброс пароля недоступен, только через учебную часть.</div>
@@ -181,6 +194,34 @@ else
                 </div>
 
                 <h5 class="mt-4">Сменить пароль</h5>
+                @if (profile.TempPassword != null)
+                {
+                    @* учебная часть выдала временный пароль: показываем его, пока студент не сменит *@
+                    <div class="alert alert-warning py-2" style="max-width:420px">
+                        Вам выдан временный пароль. Вставьте его в «Старый пароль» и придумайте свой.
+                        <div class="d-flex align-items-center gap-2 mt-2">
+                            <code class="eq-temp-pass">@profile.TempPassword</code>
+                            @* значок «копировать»; после нажатия на 2 секунды становится галочкой *@
+                            <button type="button" class="eq-copy" title="Скопировать" @onclick="() => Copy(profile.TempPassword)">
+                                @if (copied)
+                                {
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                         stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M5 12l5 5L20 7" />
+                                    </svg>
+                                }
+                                else
+                                {
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                         stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="12" height="12" rx="2" />
+                                        <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                                    </svg>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                }
                 <div class="eq-enter" style="max-width:420px">
                     <PasswordInput Class="mb-2" Placeholder="Старый пароль" @bind-Value="oldPassword" />
                     <PasswordInput Class="mb-2" Placeholder="Новый пароль" @bind-Value="newPassword" />
@@ -201,7 +242,8 @@ else
                               string? PendingFullName, string? PendingGroup,
                               int? PendingOfficeId, string? PendingOffice, string? PendingReason,
                               int Access, string AccessName, string? Punishment, DateTime? NextDrop,
-                              string? DataBlock, List<string> Warnings, string? Email);
+                              string? DataBlock, List<string> Warnings, string? Email,
+                              string? EmailFull, string? TempPassword);
     private record PasswordResult(string Text, string Token);   // ответ на смену пароля: текст и новый пропуск
     private record MyBookingDto(int Id, string Text, bool CanCancel);
 
@@ -222,6 +264,8 @@ else
     private string tab = "data";       // открытый раздел: "bookings", "data" или "settings"
     private bool editing;              // нажали «Изменить»
     private bool changingEmail;        // нажали «Сменить почту»
+    private bool showEmail;            // глазик у почты: показать адрес полностью
+    private bool copied;               // временный пароль только что скопировали — показываем галочку
     private StudentForm form = new();  // поля для «Изменить»
 
     private string oldPassword = "";
@@ -341,6 +385,16 @@ else
         await Auth.SetToken(data.Token);
         message = data.Text;
         oldPassword = newPassword = repeat = "";
+    }
+
+    // скопировать текст в буфер обмена; значок на 2 секунды меняется на галочку
+    private async Task Copy(string text)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        copied = true;
+        StateHasChanged();        // перерисовать сразу, не дожидаясь конца паузы
+        await Task.Delay(2000);
+        copied = false;
     }
 
     // «Выйти» — выходим и сразу открываем окно входа

@@ -29,7 +29,7 @@
             @if (mode == "register")
             {
                 <StudentFields Form="form" ShowOffice="true" />
-                <input class="form-control mb-2" placeholder="Номер студенческого" inputmode="numeric" @bind="login" />
+                <input class="form-control mb-2" placeholder="Номер студенческого (4 цифры)" inputmode="numeric" maxlength="4" @bind="login" />
                 <PasswordInput Class="mb-3" Placeholder="Пароль (не короче 6 символов)" @bind-Value="password" />
                 <button class="btn btn-success w-100 eq-submit" @onclick="DoRegister">Зарегистрироваться</button>
             }
@@ -44,7 +44,8 @@
             }
             @if (notice != null)
             {
-                <div class="alert alert-warning mt-3 mb-0">@notice</div>
+                @* «Пароль изменён» — зелёная, «Сессия истекла» — жёлтая *@
+                <div class="alert @(noticeOk ? "alert-success" : "alert-warning") mt-3 mb-0">@notice</div>
             }
 
             @if (error != null)
@@ -73,6 +74,7 @@
     private StudentForm form = new();   // ФИО, группа, корпус — их заполняет StudentFields
     private string? error;
     private string? notice;   // «Сессия истекла…» — если нас сюда выкинуло
+    private bool noticeOk;    // true — хорошая новость (пароль изменён)
 
     // какое окно показать: "login", "register" или "staff"
     private string mode = "login";
@@ -101,6 +103,7 @@
         notice = Nav.Uri.Contains("expired=1") ? "Сессия истекла. Войдите снова."
                : Nav.Uri.Contains("reset=1") ? "Пароль изменён. Войдите с новым паролем."
                : null;
+        noticeOk = Nav.Uri.Contains("reset=1");
     }
 
     // ушли со страницы — отписаться
@@ -126,6 +129,11 @@
         if (login == "" || password == "")
         {
             error = "Введите номер студенческого и пароль";
+            return;
+        }
+        if (login.Length != 4 || !login.All(char.IsDigit))
+        {
+            error = "Номер студенческого — 4 цифры";
             return;
         }
         if (password.Length < 6)
