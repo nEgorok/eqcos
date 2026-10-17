@@ -2,6 +2,7 @@
 @inject HttpClient Http
 @inject AuthService Auth
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Профиль</PageTitle>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3" style="max-width:820px">
@@ -99,7 +100,38 @@ else
                         <div class="eq-row"><span class="text-muted">Группа</span><span>@profile.Group</span></div>
                         <div class="eq-row"><span class="text-muted">Корпус</span><span>@(profile.Office ?? "не указан")</span></div>
                         <div class="eq-row"><span class="text-muted">Статус</span><span>@StatusText(profile.Status)</span></div>
+                        @if (profile.DataBlock != null)
+                        {
+                            <div class="alert alert-danger py-2 mt-3 mb-0">@profile.DataBlock.</div>
+                        }
                         <button class="btn eq-btn eq-btn-blue mt-3" @onclick="StartEdit">Изменить</button>
+
+                        @* ---- Доступ к записи: так студент видит порядочность (без слов «уровень» и «рейтинг») ---- *@
+                        <h5 class="mt-4">Доступ к записи</h5>
+                        <div class="eq-access" title="Чем больше нарушений, тем строже доступ">
+                            @for (var i = 0; i <= 6; i++)
+                            {
+                                <span class="@(i <= profile.Access ? $"eq-lvl-{profile.Access}" : "")"></span>
+                            }
+                        </div>
+                        <div class="mt-2"><LevelDot Level="profile.Access" /><b>@Capital(profile.AccessName)</b></div>
+                        @foreach (var w in profile.Warnings)
+                        {
+                            <div class="alert alert-warning eq-warn py-2 mt-2 mb-0"><b>⚠ Предупреждение.</b> @w</div>
+                        }
+                        @if (profile.Punishment != null)
+                        {
+                            <div class="alert alert-danger py-2 mt-2 mb-0">Сейчас @profile.Punishment.</div>
+                        }
+                        @if (profile.NextDrop != null)
+                        {
+                            <div class="small text-muted mt-2">Если не будет нарушений, доступ станет свободнее @profile.NextDrop.Value.ToString("dd.MM.yyyy").</div>
+                        }
+                        <div class="small text-muted mt-2">
+                            Неявки, отмена позже чем за 30 минут, слишком частые записи и отмены или заявки на изменение данных
+                            ограничивают доступ к записи. Чем больше нарушений, тем строже и дольше ограничения.
+                            Без нарушений доступ постепенно возвращается.
+                        </div>
                     }
                     else
                     {
@@ -149,8 +181,13 @@ else
     private record ProfileDto(string Login, string FullName, string Group, string Role, int? OfficeId, string? Office,
                               string Status, string? RejectReason,
                               string? PendingFullName, string? PendingGroup,
-                              int? PendingOfficeId, string? PendingOffice, string? PendingReason);
+                              int? PendingOfficeId, string? PendingOffice, string? PendingReason,
+                              int Access, string AccessName, string? Punishment, DateTime? NextDrop,
+                              string? DataBlock, List<string> Warnings);
     private record MyBookingDto(int Id, string Text, bool CanCancel);
+
+    // первая буква заглавная: «без ограничений» → «Без ограничений»
+    private static string Capital(string s) => s.Length == 0 ? s : char.ToUpper(s[0]) + s[1..];
 
     // статус по-русски
     private static string StatusText(string s) => s switch
@@ -230,15 +267,25 @@ else
 
         await Show(await Http.PutAsJsonAsync("api/profile", form.ToJson()));
         if (ok)
-        {
             editing = false;
-            await Load();
-        }
+        // обновить данные и при отказе тоже: плашка «На проверке» должна показывать то, что реально лежит в базе
+        // (админ мог уже подтвердить заявку, пока страница была открыта)
+        await Load();
     }
 
     private async Task CancelBooking(int id)
     {
-        await Show(await Http.DeleteAsync($"api/slots/my/{id}"));
+        var resp = await Http.DeleteAsync($"api/slots/my/{id}");
+
+        // 409: до записи меньше 30 минут — сервер спрашивает, отменять ли (засчитается неявка)
+        if (resp.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            if (!await JS.InvokeAsync<bool>("confirm", await resp.Content.ReadAsStringAsync()))
+                return;
+            resp = await Http.DeleteAsync($"api/slots/my/{id}?confirm=true");
+        }
+
+        await Show(resp);
         await Load();
     }
 

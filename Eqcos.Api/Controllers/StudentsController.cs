@@ -52,7 +52,7 @@ public class StudentsController : ControllerBase
         var list = query
             .OrderBy(u => u.Group).ThenBy(u => u.FullName)
             .Take(300)
-            .Select(u => new { u.Id, u.Login, u.FullName, u.Group, u.Status })
+            .Select(u => new { u.Id, u.Login, u.FullName, u.Group, u.Status, u.Level, u.Blocked })
             .ToList();
         return Ok(list);
     }
@@ -64,6 +64,9 @@ public class StudentsController : ControllerBase
         var u = FindStudent(id);
         if (u == null)
             return NotFound("Студент не найден");
+
+        Conduct.Refresh(_db, u);
+        _db.SaveChanges();
 
         var purposes = _db.Purposes.ToDictionary(p => p.Id);
         var bookings = _db.Bookings
@@ -107,8 +110,105 @@ public class StudentsController : ControllerBase
             NoShow = bookings.Count(b => b.Status == BookingStatus.NoShow && purposes.GetValueOrDefault(b.PurposeId)?.AdminOnly != true),
             Cancelled = bookings.Count(b => b.Status == BookingStatus.Cancelled),
             History = history,
-            Log = log
+            Log = log,
+            Conduct = ConductCard(u)
         });
+    }
+
+    // порядочность для карточки: уровень, наказание и три шкалы
+    private object ConductCard(User u)
+    {
+        var weeks = Conduct.StrikeWeeks(u);
+        var strikes = Conduct.Strikes(_db, u).Select(b => new
+        {
+            Text = $"{b.Date:dd.MM} в {b.Time:HH:mm}" + (b.Status == BookingStatus.Cancelled ? " (поздняя отмена)" : ""),
+            Burns = Clock.ToMsk(b.StrikeAt!.Value.AddDays(7 * weeks))   // когда сгорит
+        });
+
+        var events = _db.ConductEvents
+            .Where(e => e.UserId == u.Id && e.Kind != ConductKind.Request)
+            .OrderByDescending(e => e.At)
+            .Take(30)
+            .ToList()
+            .Select(e => new { At = Clock.ToMsk(e.At), e.Text });
+
+        return new
+        {
+            u.Level,
+            Name = Conduct.Names[u.Level],
+            Punishment = Conduct.Punishment(u),
+            NextDrop = Conduct.NextDrop(u),
+            u.Lifted,
+            CanLift = u.PunishUntil != null || Conduct.IsLifetime(u),
+            Strikes = strikes,
+            StrikeLimit = Conduct.StrikeLimit(u),
+            StrikeWeeks = weeks,
+            ActionsHour = Conduct.ActionsHour(_db, u),
+            SpamLimit = Conduct.SpamLimit,
+            SpamWarnings = Conduct.SpamCount(_db, u),
+            SpamWarningLimit = Conduct.SpamWarnings,
+            Requests = Conduct.RequestsHour(_db, u),
+            DataLimit = Conduct.DataLimit,
+            DataWarnings = Conduct.DataSpamCount(_db, u),
+            DataBlockAt = Conduct.DataBlockAt,
+            DataUntil = u.DataUntil == null ? (DateTime?)null : Clock.ToMsk(u.DataUntil.Value),
+            u.Blocked,
+            Events = events
+        };
+    }
+
+    // СНЯТЬ БАН (или ограничение «1 запись»)
+    [HttpPost("{id}/lift")]
+    public IActionResult Lift(int id)
+    {
+        var u = FindStudent(id);
+        if (u == null)
+            return NotFound("Студент не найден");
+
+        Conduct.Refresh(_db, u);
+        if (u.PunishUntil == null && !Conduct.IsLifetime(u))
+            return BadRequest("Сейчас у студента нет бана");
+
+        var was = Conduct.Punishment(u);
+        Conduct.Lift(_db, u);
+        Log(u.Id, $"Снят бан ({was})");
+        _db.SaveChanges();
+        return Ok("Бан снят");
+    }
+
+    // РАЗБЛОКИРОВАТЬ учётку (заблокирована за подозрительно частые заявки на изменение данных)
+    [HttpPost("{id}/unblock")]
+    public IActionResult Unblock(int id)
+    {
+        var u = FindStudent(id);
+        if (u == null)
+            return NotFound("Студент не найден");
+        if (!u.Blocked)
+            return BadRequest("Учётная запись не заблокирована");
+
+        Conduct.Unblock(_db, u);
+        Log(u.Id, "Учётная запись разблокирована");
+        _db.SaveChanges();
+        return Ok("Учётная запись разблокирована");
+    }
+
+    // ПОНИЗИТЬ УРОВЕНЬ на ступень
+    [HttpPost("{id}/lower")]
+    public IActionResult Lower(int id)
+    {
+        var u = FindStudent(id);
+        if (u == null)
+            return NotFound("Студент не найден");
+
+        Conduct.Refresh(_db, u);
+        if (u.Level == 0)
+            return BadRequest("Уровень и так зелёный");
+
+        var was = u.Level;
+        Conduct.Lower(_db, u);
+        Log(u.Id, $"Уровень понижен: {was} → {u.Level}");
+        _db.SaveChanges();
+        return Ok($"Уровень понижен до {u.Level}");
     }
 
     // ПРАВКА данных админом: сразу, без заявки, пишется в журнал
@@ -201,6 +301,7 @@ public class StudentsController : ControllerBase
         }
 
         _db.Notifications.RemoveRange(_db.Notifications.Where(n => n.UserId == u.Id));
+        _db.ConductEvents.RemoveRange(_db.ConductEvents.Where(e => e.UserId == u.Id));
         Log(u.Id, $"Удалена учётная запись {u.Login} ({u.FullName}, {u.Group}). Причина: {reason}");
         _db.Users.Remove(u);
         _db.SaveChanges();

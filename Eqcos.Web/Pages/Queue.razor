@@ -46,7 +46,7 @@ else
                     var state = State(b);
                     <tr @key="b.Id" class="@(state == "Сейчас" ? "table-primary" : "")">
                         <td>@b.Time.ToString("HH:mm")–@b.End.ToString("HH:mm")</td>
-                        <td>@b.StudentName <span class="text-muted small">@b.Login</span></td>
+                        <td><LevelDot Level="b.Level" />@b.StudentName <span class="text-muted small">@b.Login</span></td>
                         <td>@b.Group</td>
                         <td>@(b.IsSummon ? "Вызов: " : "")@b.Purpose</td>
                         <td>

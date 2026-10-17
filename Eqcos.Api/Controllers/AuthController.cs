@@ -99,8 +99,9 @@ public class AuthController : ControllerBase
             return Unauthorized("Неверный логин или пароль");
         // студент — только через студенческое окно, админ — только через окно сотрудников
         var isAdmin = user.Role == "Admin";
-        if (isAdmin != r.Staff)
-            return Unauthorized("Неверный логин или пароль");
+        // заблокирована за подозрительные действия — говорим только при верном пароле
+        if (user.Blocked)
+            return Unauthorized("Учётная запись заблокирована из-за подозрительных действий. Обратитесь в учебную часть.");
         return Ok(new { token = CreateToken(user), role = user.Role, fullName = user.FullName });
     }
     // учётку отклонили и стёрли: при верном пароле объясняем почему (30 дней).

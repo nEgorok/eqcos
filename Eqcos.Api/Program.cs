@@ -62,7 +62,7 @@ app.Use(async (context, next) =>
     if (int.TryParse(id, out var userId))
     {
         var db = context.RequestServices.GetRequiredService<AppDbContext>();
-        if (!await db.Users.AnyAsync(u => u.Id == userId))
+        if (!await db.Users.AnyAsync(u => u.Id == userId && !u.Blocked))   // удалили или заблокировали
         {
             context.Response.StatusCode = 401;
             await context.Response.WriteAsync("Учётная запись не найдена. Войдите снова.");

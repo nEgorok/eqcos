@@ -32,6 +32,10 @@ public class ProfileController : ControllerBase
         if (u == null)
             return NotFound("Пользователь не найден");
 
+        // порядочность: закончился бан, прошёл чистый срок — применить перед показом
+        Conduct.Refresh(_db, u);
+        _db.SaveChanges();
+
         var office = u.OfficeId == null ? null : _db.Offices.Find(u.OfficeId)?.Name;
         var pendingOffice = u.PendingOfficeId == null ? null : _db.Offices.Find(u.PendingOfficeId)?.Name;
 
@@ -49,7 +53,15 @@ public class ProfileController : ControllerBase
             u.PendingGroup,
             u.PendingOfficeId,
             PendingOffice = pendingOffice,
-            u.PendingReason
+            u.PendingReason,
+            // «Доступ к записи» (так студент видит порядочность; слово «уровень» ему не показываем)
+            Access = u.Level,                        // ступень 0–6 для шкалы
+            AccessName = Conduct.AccessNames[u.Level],
+            Punishment = Conduct.Punishment(u),     // «запись закрыта до ...» или null
+            NextDrop = Conduct.NextDrop(u),          // когда доступ станет свободнее
+            BookBlock = u.Role == "Student" ? Conduct.BookBlock(_db, u) : null,   // красная плашка: почему нельзя записаться
+            DataBlock = Conduct.DataBlock(u),                                      // красная плашка: смена данных закрыта
+            Warnings = u.Role == "Student" ? Conduct.ActiveWarnings(_db, u) : new List<string>()   // жёлтые плашки
         });
     }
 
@@ -91,10 +103,23 @@ public class ProfileController : ControllerBase
                 return Ok("Данные не изменились");
             }
 
+            // ту же заявку прислали ещё раз (не поняли, ушла ли) — не считаем, просто успокаиваем
+            if (u.PendingFullName == fullName && u.PendingGroup == group && u.PendingOfficeId == r.OfficeId)
+                return Ok("Эта заявка уже отправлена и ждёт проверки в учебной части.");
+
             if (reason == "")
                 return BadRequest("Укажите причину изменения");
             if (reason.Length > 100)
                 return BadRequest("Причина слишком длинная");
+
+            // спам сменой данных: больше 3 заявок в месяц — закрыто до следующего месяца
+            var block = Conduct.CanRequestData(_db, u);
+            if (block != null)
+            {
+                _db.SaveChanges();   // предупреждение сохраняем
+                return BadRequest(block);
+            }
+            Conduct.DataRequested(_db, u);
 
             // подтверждённый: старые данные продолжают действовать, новые — на проверку.
             // Если меняется корпус, заявку увидит админ НОВОГО корпуса.

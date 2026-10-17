@@ -6,7 +6,8 @@ public record AdminBookingDto(
     string Login, string StudentName, string Group, string Purpose, bool IsSummon,
     string Status, bool Moved, string? Note,
     string? FirstMark, DateTime? CorrectedAt,
-    bool CanCame, bool CanNoShow, bool CanDelete);
+    bool CanCame, bool CanNoShow, bool CanDelete,
+    int Level);   // порядочность студента (точка у фамилии)
 
 // статус записи по-русски
 public static class BookingText

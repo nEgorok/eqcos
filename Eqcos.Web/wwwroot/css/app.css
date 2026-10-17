@@ -566,3 +566,75 @@ h2 {
         grid-template-columns: 1fr;
     }
 }
+/* ===== Порядочность: цветная точка уровня 0–6 ===== */
+.eq-dot {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    margin-right: 0.45rem;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.eq-lvl-0 {
+    background: #2e9e44;
+}
+/* зелёный */
+.eq-lvl-1 {
+    background: #9acd32;
+}
+/* салатовый */
+.eq-lvl-2 {
+    background: #f2c200;
+}
+/* жёлтый */
+.eq-lvl-3 {
+    background: #f28c00;
+}
+/* оранжевый */
+.eq-lvl-4 {
+    background: #e02020;
+}
+/* красный */
+.eq-lvl-5 {
+    background: #a00000;
+}
+/* тёмно-красный */
+.eq-lvl-6 {
+    background: #6b1e14;
+}
+/* красно-бурый */
+/* предупреждение на главной: жёлтое с полосой слева */
+.eq-warn {
+    border-left: 5px solid #f2a900;
+}
+
+/* «Доступ к записи» в профиле студента: 7 клеток, закрашены до текущей ступени */
+.eq-access {
+    display: flex;
+    gap: 4px;
+    max-width: 280px;
+}
+
+    .eq-access span {
+        flex: 1;
+        height: 10px;
+        border-radius: 3px;
+    }
+
+        /* незакрашенные клетки — серые; закрашенные берут цвет из .eq-lvl-N */
+        .eq-access span:not([class*="eq-lvl"]) {
+            background: #e3e6ea;
+        }
+
+/* заголовок таблицы, по которому можно сортировать */
+.eq-sort {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+    .eq-sort:hover {
+        color: var(--bs-primary);
+    }

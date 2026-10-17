@@ -65,6 +65,10 @@ public class Cleanup : BackgroundService
         var expired = now.AddDays(-RejectedDays);
         db.RejectedAccounts.RemoveRange(db.RejectedAccounts.Where(r => r.RejectedAt < expired));
 
+        // 3. порядочность: закончились баны, прошли чистые сроки (точки в очереди и уведомления не ждут входа студента)
+        foreach (var u in db.Users.Where(u => u.Level > 0 || u.PunishUntil != null).ToList())
+            Conduct.Refresh(db, u);
+
         db.SaveChanges();
     }
 }

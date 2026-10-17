@@ -9,4 +9,5 @@ public class Notification
     public DateTime CreatedAt { get; set; }  // когда создано
     public bool IsRead { get; set; }         // уже нажал "Ок"
     public int? BookingId { get; set; }      // к какой записи относится (если есть)
+    public bool Warning { get; set; }        // предупреждение или ограничение записи — показываем жёлтым
 }

@@ -17,6 +17,9 @@ public class Booking
     public string? FirstMark { get; set; }       // отметка до исправления (Came или NoShow); null — не исправляли
     public DateTime? CorrectedAt { get; set; }   // когда исправили отметку (UTC)
     public bool Resolved { get; set; }   // вызов, отменённый системой, уже разобран: назначен заново или «не нужно»
+    public DateTime? CreatedAt { get; set; }     // когда записался (UTC)
+    public DateTime? CancelledAt { get; set; }   // когда студент сам отменил (UTC)
+    public DateTime? StrikeAt { get; set; }      // когда засчитана неявка (не пришёл или поздняя отмена); null — неявки нет
 }
 
 // возможные состояния записи. Запись больше не удаляется из базы — у неё меняется статус,

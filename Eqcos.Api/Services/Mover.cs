@@ -81,14 +81,15 @@ public static class Mover
         return null;   // за 2 недели места нет
     }
 
-    // создать уведомление студенту
-    public static void Notify(AppDbContext db, int userId, int? bookingId, string text)
+    // создать уведомление студенту. warning = true — предупреждение (на сайте жёлтое)
+    public static void Notify(AppDbContext db, int userId, int? bookingId, string text, bool warning = false)
     {
         db.Notifications.Add(new Notification
         {
             UserId = userId,
             BookingId = bookingId,   // есть Id — у студента будет кнопка «Выбрать другое время»
             Text = text,
+            Warning = warning,
             CreatedAt = DateTime.UtcNow   // PostgreSQL хранит время с поясом только в UTC
         });
     }

@@ -21,7 +21,8 @@ public record AdminBooking(
     string Login, string StudentName, string Group, string Purpose, bool IsSummon,
     string Status, bool Moved, string? Note,
     string? FirstMark, DateTime? CorrectedAt,
-    bool CanCame, bool CanNoShow, bool CanDelete);
+    bool CanCame, bool CanNoShow, bool CanDelete,
+    int Level);   // порядочность студента — цветная точка у фамилии
 
 // панель учебной части: очередь, история, отметки, удаление
 [ApiController]
@@ -180,6 +181,16 @@ public class AdminController : ControllerBase
         }
         b.Status = r.Status;
 
+        // порядочность: неявка по своей записи идёт в шкалу (вызов и перенесённая системой — нет)
+        var student = _db.Users.Find(b.StudentId);   // учётку могли удалить
+        if (student != null && !IsSummon(b) && !b.Moved)
+        {
+            if (b.Status == BookingStatus.NoShow && b.StrikeAt == null)
+                Conduct.AddStrike(_db, student, b, $"Неявка: {b.Date:dd.MM} в {b.Time:HH:mm}");
+            else if (b.Status == BookingStatus.Came)
+                Conduct.RemoveStrike(_db, b);
+        }
+
         _db.SaveChanges();
         return Ok($"{b.StudentName}, {b.Date:dd.MM} {b.Time:HH:mm}: {(b.Status == BookingStatus.Came ? "пришёл" : "не пришёл")}");
     }
@@ -242,7 +253,7 @@ public class AdminController : ControllerBase
     private List<AdminBooking> ToRows(List<Booking> list)
     {
         var ids = list.Select(b => b.StudentId).Distinct().ToList();
-        var logins = _db.Users.Where(u => ids.Contains(u.Id)).ToDictionary(u => u.Id, u => u.Login);
+        var users = _db.Users.Where(u => ids.Contains(u.Id)).ToDictionary(u => u.Id);
         var purposes = _db.Purposes.ToDictionary(p => p.Id);
 
         return list.Select(b =>
@@ -250,12 +261,13 @@ public class AdminController : ControllerBase
             var purpose = purposes.GetValueOrDefault(b.PurposeId);
             return new AdminBooking(
                 b.Id, b.Date, b.Time, b.Time.AddMinutes(b.Minutes),
-                logins.GetValueOrDefault(b.StudentId, "—"),   // аккаунт могли удалить
+                users.GetValueOrDefault(b.StudentId)?.Login ?? "—",   // аккаунт могли удалить
                 b.StudentName, b.Group,
                 purpose?.Name ?? "—", purpose?.AdminOnly == true,
                 b.Status, b.Moved, b.Note,
                 b.FirstMark, b.CorrectedAt == null ? null : Clock.ToMsk(b.CorrectedAt.Value),
-                CanCame(b), CanNoShow(b), CanDelete(b));
+                CanCame(b), CanNoShow(b), CanDelete(b),
+                users.GetValueOrDefault(b.StudentId)?.Level ?? 0);
         }).ToList();
     }
 }

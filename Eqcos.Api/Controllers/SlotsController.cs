@@ -123,6 +123,12 @@ public class SlotsController : ControllerBase
         if (user.OfficeId != r.OfficeId)
             return BadRequest("Записаться можно только в свой корпус");
 
+        // порядочность: бан, ограничение «1 запись», спам записью/отменой
+        var ban = Conduct.CanBook(_db, user);
+        _db.SaveChanges();   // предупреждение (если выдали) сохраняем, даже когда отказываем
+        if (ban != null)
+            return BadRequest(ban);
+
         // дальше — строго по очереди: сначала этот студент, потом этот корпус в этот день
         using var tx = _db.Database.BeginTransaction();
         LockStudent(_db, user.Id);
@@ -145,7 +151,8 @@ public class SlotsController : ControllerBase
             Minutes = purpose.Minutes,
             StudentId = user.Id,
             StudentName = user.FullName,
-            Group = user.Group
+            Group = user.Group,
+            CreatedAt = DateTime.UtcNow   // для спама и «отмены в первые 5 минут»
         });
         _db.SaveChanges();
         tx.Commit();   // всё прошло — фиксируем и отпускаем очередь
@@ -165,10 +172,11 @@ public class SlotsController : ControllerBase
         return Ok(result);
     }
 
-    // отменить СВОЮ запись по Id
+    // отменить СВОЮ запись по Id.
+    // Поздняя отмена (меньше 30 минут) = неявка: сначала сервер спрашивает (409), confirm=true — студент согласился
     [Authorize(Roles = "Student")]
     [HttpDelete("slots/my/{id}")]
-    public IActionResult CancelMy(int id)
+    public IActionResult CancelMy(int id, bool confirm = false)
     {
         var b = _db.Bookings.Find(id);
         if (b == null || b.StudentId != CurrentUserId || b.Status != BookingStatus.Active)
@@ -180,8 +188,20 @@ public class SlotsController : ControllerBase
         if (!Clock.NotEnded(b.Date, b.Time, b.Minutes))
             return BadRequest("Эта запись уже прошла");
 
+        var late = Conduct.IsLateCancel(b);
+        if (late && !confirm)
+            return Conflict($"До записи меньше {Conduct.LateMinutes} минут: отмена засчитается как неявка. Всё равно отменить?");
+
         b.Status = BookingStatus.Cancelled;   // не удаляем, а помечаем — останется в истории
+        b.CancelledAt = DateTime.UtcNow;
         _db.SaveChanges();
+
+        if (late)
+        {
+            var user = _db.Users.Find(CurrentUserId)!;
+            Conduct.AddStrike(_db, user, b, $"Поздняя отмена записи {b.Date:dd.MM} в {b.Time:HH:mm}");
+            return Ok($"Запись на {b.Date:dd.MM} в {b.Time:HH:mm} отменена. Отмена поздняя — засчитана неявка");
+        }
         return Ok($"Запись на {b.Date:dd.MM} в {b.Time:HH:mm} отменена");
     }
 
@@ -253,7 +273,8 @@ public class SlotsController : ControllerBase
             Minutes = purpose.Minutes,
             StudentId = student.Id,
             StudentName = student.FullName,
-            Group = student.Group
+            Group = student.Group,
+            CreatedAt = DateTime.UtcNow
         });
 
         // отменённые системой вызовы этого студента больше не надо переносить — убрать из списка

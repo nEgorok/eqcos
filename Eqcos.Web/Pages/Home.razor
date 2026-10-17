@@ -15,7 +15,7 @@
         <div class="alert alert-primary">
             @n.Text
             <div class="mt-2">
-                <button class="btn btn-sm btn-primary" @onclick="() => NotifyOk(n.Id)">Ок</button>
+                <button class="btn btn-sm btn-primary" @onclick="() => NotifyOk(n.Id)">Понятно</button>
                 @if (n.CanChange)
                 {
                     <button class="btn btn-sm btn-outline-primary ms-2" @onclick="() => NotifyOther(n.Id)">Выбрать другое время</button>
@@ -43,6 +43,23 @@
 {
     <div class="alert alert-warning">
         Изменение ваших данных на проверке в учебной части. Записываться можно, пока действуют прежние данные.
+    </div>
+}
+@if (me?.Warnings != null)
+{
+    @* предупреждения: скрыть нельзя, пропадут сами, когда сгорят *@
+    @foreach (var w in me.Warnings)
+    {
+        <div class="alert alert-warning eq-warn">
+            <b>⚠ Предупреждение.</b> @w
+        </div>
+    }
+}
+@if (me?.BookBlock != null)
+{
+    @* бан, ограничение или спам: записаться нельзя, свободное время смотреть можно *@
+    <div class="alert alert-danger">
+        <b>Записаться сейчас нельзя.</b> @me.BookBlock
     </div>
 }
 @if (message != null)
@@ -112,7 +129,7 @@ else
             <strong class="me-2">@(hour.Key):00</strong>
             @foreach (var s in hour)
             {
-                <button class="btn btn-sm btn-outline-primary m-1" @onclick="() => Book(s)">@s</button>
+                <button class="btn btn-sm btn-outline-primary m-1" disabled="@(me?.BookBlock != null)" @onclick="() => Book(s)">@s</button>
             }
         </div>
     }
@@ -122,7 +139,9 @@ else
     private record OfficeDto(int Id, string Name);
     private record PurposeDto(int Id, string Name, int Minutes);
     private record NotificationDto(int Id, string Text, bool CanChange);
-    private record StatusDto(string Status, int? OfficeId, string? RejectReason, string? PendingFullName, string? PendingGroup);
+    private record StatusDto(string Status, int? OfficeId, string? RejectReason, string? PendingFullName, string? PendingGroup,
+                             string? BookBlock,       // почему нельзя записаться (бан и т.п.); null — можно
+                             List<string>? Warnings); // действующие предупреждения (жёлтые плашки)
     private StatusDto? me;   // статус моей учётной записи
 
     private List<OfficeDto>? offices;

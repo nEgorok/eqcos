@@ -12,6 +12,9 @@ public static class Clock
     public static DateTime Now => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Msk);
     // перевести время из UTC (так оно лежит в базе) в московское
     public static DateTime ToMsk(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(utc, Msk);
+    // обратно: московское время → UTC (чтобы сравнивать с временем в базе)
+    public static DateTime FromMsk(DateTime msk) =>
+        TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(msk, DateTimeKind.Unspecified), Msk);
 
     public static DateOnly Today => DateOnly.FromDateTime(Now);
     public static TimeOnly Time => TimeOnly.FromDateTime(Now);

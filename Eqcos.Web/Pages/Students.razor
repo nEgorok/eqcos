@@ -30,17 +30,25 @@ else
     {
         <table class="table align-middle eq-click-rows">
             <thead>
-                <tr><th>Группа</th><th>ФИО</th><th>Студенческий</th><th>Статус</th></tr>
+                <tr>
+                    @* по кружочку, группе и статусу можно сортировать: щелчок — сортировать, ещё щелчок — в обратную сторону *@
+                    <th class="eq-sort" title="Порядочность" @onclick='() => SortBy("level")'><span>●</span>@Arrow("level")</th>
+                    <th class="eq-sort" @onclick='() => SortBy("group")'><span>Группа</span>@Arrow("group")</th>
+                    <th>ФИО</th>
+                    <th>Студенческий</th>
+                    <th class="eq-sort" @onclick='() => SortBy("status")'><span>Статус</span>@Arrow("status")</th>
+                </tr>
             </thead>
             <tbody>
-                @foreach (var s in rows)
+                @foreach (var s in Sorted())
                 {
                     @* щелчок по строке — открыть карточку *@
                     <tr @onclick='() => Nav.NavigateTo($"admin/students/{s.Id}")'>
+                        <td><LevelDot Level="s.Level" /></td>
                         <td>@s.Group</td>
                         <td>@s.FullName</td>
                         <td>@s.Login</td>
-                        <td>@(s.Status == "Approved" ? "подтверждён" : "на проверке")</td>
+                        <td>@(s.Blocked ? "заблокирован" : s.Status == "Approved" ? "подтверждён" : "на проверке")</td>
                     </tr>
                 }
             </tbody>
@@ -49,11 +57,46 @@ else
 }
 
 @code {
-    private record StudentRow(int Id, string Login, string FullName, string Group, string Status);
+    private record StudentRow(int Id, string Login, string FullName, string Group, string Status, int Level, bool Blocked);
 
     private List<StudentRow>? rows;
     private string search = "";
     private CancellationTokenSource? searchDelay;   // чтобы не искать на каждую букву
+
+    private string sort = "group";   // по какому столбцу сортируем: "level", "group" или "status"
+    private bool desc;               // true — в обратную сторону
+
+    // щелчок по заголовку: тот же столбец — развернуть порядок, другой — сортировать по нему.
+    // Кружочки сначала показываем худшими сверху, остальное — по возрастанию
+    private void SortBy(string column)
+    {
+        if (sort == column)
+        {
+            desc = !desc;
+        }
+        else
+        {
+            sort = column;
+            desc = column == "level";
+        }
+    }
+
+    // стрелка у заголовка, по которому сейчас отсортировано
+    private string Arrow(string column) => sort != column ? "" : desc ? " ▼" : " ▲";
+
+    // строки в выбранном порядке (сортируем то, что уже загружено, без запроса к серверу).
+    // Группа "204Лг" начинается с курса, поэтому сортировка по группе — это и по курсу.
+    // При равенстве — по группе и ФИО, чтобы порядок не прыгал
+    private IEnumerable<StudentRow> Sorted()
+    {
+        IOrderedEnumerable<StudentRow> list = sort switch
+        {
+            "level" => desc ? rows!.OrderByDescending(s => s.Level) : rows!.OrderBy(s => s.Level),
+            "status" => desc ? rows!.OrderByDescending(s => s.Status) : rows!.OrderBy(s => s.Status),
+            _ => desc ? rows!.OrderByDescending(s => s.Group) : rows!.OrderBy(s => s.Group)
+        };
+        return list.ThenBy(s => s.Group).ThenBy(s => s.FullName);
+    }
 
     protected override async Task OnInitializedAsync()
     {

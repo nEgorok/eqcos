@@ -23,7 +23,7 @@ else if (card == null)
 }
 else
 {
-    <h1 class="mt-2">@card.FullName</h1>
+    <h1 class="mt-2"><LevelDot Level="card.Conduct.Level" />@card.FullName</h1>
 
     @if (message != null)
     {
@@ -64,6 +64,83 @@ else
             <div class="eq-row"><span class="text-muted">Пришёл</span><span>@card.Came</span></div>
             <div class="eq-row"><span class="text-muted">Не пришёл</span><span>@card.NoShow</span></div>
             <div class="eq-row"><span class="text-muted">Отменил сам</span><span>@card.Cancelled</span></div>
+
+            @* ---- Порядочность ---- *@
+            @{
+                var c = card.Conduct;
+            }
+            <h5 class="mt-4">Порядочность</h5>
+            <div class="eq-row">
+                <span><LevelDot Level="c.Level" />Уровень @c.Level из 6@(c.Lifted ? ", пожизненный снят" : "")</span>
+            </div>
+            @if (c.Punishment != null)
+            {
+                <div class="alert alert-danger py-2 mt-2 mb-2">Сейчас: @c.Punishment</div>
+            }
+            @if (c.NextDrop != null)
+            {
+                <div class="small text-muted mb-2">Без нарушений уровень понизится @c.NextDrop.Value.ToString("dd.MM.yyyy HH:mm")</div>
+            }
+
+            <div class="eq-row">
+                <span class="text-muted">Неявки</span>
+                <span>@c.Strikes.Count из @c.StrikeLimit</span>
+            </div>
+            @foreach (var s in c.Strikes)
+            {
+                <div class="small text-muted ms-3">@s.Text — сгорит @s.Burns.ToString("dd.MM")</div>
+            }
+            <div class="eq-row">
+                <span class="text-muted">Записи и отмены за час</span>
+                <span>@c.ActionsHour из @c.SpamLimit</span>
+            </div>
+            <div class="eq-row">
+                <span class="text-muted">Предупреждения за спам (4 нед.)</span>
+                <span>@c.SpamWarnings из @c.SpamWarningLimit</span>
+            </div>
+            <div class="eq-row">
+                <span class="text-muted">Заявки на изменение данных (час)</span>
+                <span>@c.Requests из @c.DataLimit</span>
+            </div>
+            <div class="eq-row">
+                <span class="text-muted">Предупреждения за смену данных (4 нед.)</span>
+                <span>@c.DataWarnings из @c.DataBlockAt</span>
+            </div>
+            @if (c.DataUntil != null)
+            {
+                <div class="small text-muted ms-3">Смена данных закрыта до @c.DataUntil.Value.ToString("dd.MM HH:mm")</div>
+            }
+            @if (c.Blocked)
+            {
+                <div class="alert alert-danger py-2 mt-2 mb-0">Учётная запись заблокирована за подозрительные действия: студент не может войти.</div>
+            }
+
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+                @if (c.CanLift)
+                {
+                    <button class="btn btn-sm btn-outline-success" @onclick="Lift">Снять бан</button>
+                }
+                @if (c.Level > 0)
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="Lower">Понизить уровень</button>
+                }
+                @if (c.Blocked)
+                {
+                    <button class="btn btn-sm btn-outline-danger" @onclick="Unblock">Разблокировать</button>
+                }
+            </div>
+
+            @if (c.Events.Count > 0)
+            {
+                <div class="small mt-3"><b>События</b></div>
+                @foreach (var e in c.Events)
+                {
+                    <div class="eq-row small">
+                        <span>@e.Text</span>
+                        <span class="text-muted text-nowrap">@e.At.ToString("dd.MM HH:mm")</span>
+                    </div>
+                }
+            }
 
             @* ---- Удалить ---- *@
             <h5 class="mt-4 text-danger">Удалить учётную запись</h5>
@@ -126,10 +203,17 @@ else
     private record HistoryDto(DateOnly Date, TimeOnly Time, string Purpose, bool IsSummon,
                               string Status, string? Note, bool Moved, string? FirstMark);
     private record LogDto(DateTime At, string Admin, string Text);
+    private record StrikeDto(string Text, DateTime Burns);
+    private record EventDto(DateTime At, string Text);
+    private record ConductDto(int Level, string Name, string? Punishment, DateTime? NextDrop, bool Lifted, bool CanLift,
+                              List<StrikeDto> Strikes, int StrikeLimit, int StrikeWeeks,
+                              int ActionsHour, int SpamLimit, int SpamWarnings, int SpamWarningLimit,
+                              int Requests, int DataLimit, int DataWarnings, int DataBlockAt, DateTime? DataUntil,
+                              bool Blocked, List<EventDto> Events);
     private record CardDto(int Id, string Login, string FullName, string Group, int? OfficeId, string? Office,
                            string Status, DateTime? CreatedAt, bool HasRequest,
                            int Came, int NoShow, int Cancelled,
-                           List<HistoryDto> History, List<LogDto> Log);
+                           List<HistoryDto> History, List<LogDto> Log, ConductDto Conduct);
 
     private CardDto? card;
     private string? error;
@@ -194,6 +278,34 @@ else
             Nav.NavigateTo("admin/students");
         else
             await Load();
+    }
+
+    // «Снять бан» и «Понизить уровень» — с подтверждением, пишутся в журнал
+    private async Task Lift()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Снять бан с {card!.FullName}?"))
+            return;
+        var resp = await Http.PostAsync($"api/students/{Id}/lift", null);
+        Say(await resp.Content.ReadAsStringAsync());
+        await Load();
+    }
+
+    private async Task Lower()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Понизить уровень {card!.FullName} на одну ступень? Текущее наказание снимется."))
+            return;
+        var resp = await Http.PostAsync($"api/students/{Id}/lower", null);
+        Say(await resp.Content.ReadAsStringAsync());
+        await Load();
+    }
+
+    private async Task Unblock()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Разблокировать {card!.FullName}? Студент снова сможет войти."))
+            return;
+        var resp = await Http.PostAsync($"api/students/{Id}/unblock", null);
+        Say(await resp.Content.ReadAsStringAsync());
+        await Load();
     }
 
     private async Task Delete()

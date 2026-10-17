@@ -60,7 +60,13 @@ namespace Eqcos.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("CorrectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateOnly>("Date")
@@ -94,6 +100,9 @@ namespace Eqcos.Api.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("StrikeAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("StudentId")
                         .HasColumnType("integer");
@@ -137,6 +146,33 @@ namespace Eqcos.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Closures");
+                });
+
+            modelBuilder.Entity("Eqcos.Api.Models.ConductEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ConductEvents");
                 });
 
             modelBuilder.Entity("Eqcos.Api.Models.GroupCode", b =>
@@ -266,6 +302,9 @@ namespace Eqcos.Api.Migrations
 
                     b.Property<int>("UserId")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("Warning")
+                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
@@ -419,7 +458,19 @@ namespace Eqcos.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("Blocked")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("CleanFrom")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DataFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DataUntil")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FullName")
@@ -429,6 +480,12 @@ namespace Eqcos.Api.Migrations
                     b.Property<string>("Group")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Lifted")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Login")
                         .IsRequired()
@@ -453,6 +510,12 @@ namespace Eqcos.Api.Migrations
                     b.Property<string>("PendingReason")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("PunishFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PunishUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("RejectReason")
                         .HasColumnType("text");
 
@@ -460,9 +523,15 @@ namespace Eqcos.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("SpamFrom")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("StrikesFrom")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
