@@ -69,6 +69,12 @@ public class Cleanup : BackgroundService
         foreach (var u in db.Users.Where(u => u.Level > 0 || u.PunishUntil != null).ToList())
             Conduct.Refresh(db, u);
 
+        // 4. синхронизация со списком техникума (если включена): ФИО, группа, корпус всех студентов
+        var college = scope.ServiceProvider.GetRequiredService<College>();
+        if (college.Sync)
+            foreach (var u in db.Users.Where(u => u.Role == "Student").ToList())
+                college.Pull(u);
+
         db.SaveChanges();
     }
 }

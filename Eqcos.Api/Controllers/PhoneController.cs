@@ -40,6 +40,8 @@ public class PhoneController : ControllerBase
             return BadRequest("SMS отключены");
 
         var u = _db.Users.Find(CurrentUserId)!;
+        if (u.Role != "Student")
+            return BadRequest("Телефон привязывается только к учётной записи студента");
         var phone = Phones.Normalize(r.Phone);
 
         if (phone == null)

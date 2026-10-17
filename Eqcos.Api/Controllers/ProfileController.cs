@@ -16,10 +16,12 @@ public record ProfileUpdate(string? LastName, string? FirstName, string? MiddleN
 public class ProfileController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly College _college;
 
-    public ProfileController(AppDbContext db)
+    public ProfileController(AppDbContext db, College college)
     {
         _db = db;
+        _college = college;   // синхронизация со списком техникума
     }
 
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -34,6 +36,7 @@ public class ProfileController : ControllerBase
 
         // порядочность: закончился бан, прошёл чистый срок — применить перед показом
         Conduct.Refresh(_db, u);
+        _college.Pull(u);   // синхронизация со списком техникума (если включена)
         _db.SaveChanges();
 
         var office = u.OfficeId == null ? null : _db.Offices.Find(u.OfficeId)?.Name;
@@ -59,6 +62,7 @@ public class ProfileController : ControllerBase
             Phone = Phones.Mask(u.Phone),            // телефон скрыто: +7 *** ***-45-67
             PhoneFull = Phones.Format(u.Phone),      // полностью — по глазику
             u.TempPassword,                          // временный пароль от учебной части (null — нет)
+            DataLocked = _college.Sync,              // данные из списка техникума: кнопки «Изменить» нет
             // «Доступ к записи» (так студент видит порядочность; слово «уровень» ему не показываем)
             Access = u.Level,                        // ступень 0–6 для шкалы
             AccessName = Conduct.AccessNames[u.Level],
@@ -75,6 +79,8 @@ public class ProfileController : ControllerBase
     [HttpPut]
     public IActionResult Update(ProfileUpdate r)
     {
+        if (_college.Sync)
+            return BadRequest("Данные берутся из списка техникума. Если они неверны, обратитесь в учебную часть");
         var last = StudentData.Fix(r.LastName);
         var first = StudentData.Fix(r.FirstName);
         var middle = StudentData.Fix(r.MiddleName);

@@ -29,8 +29,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
-// кто проверяет новых студентов (сейчас вручную админом)
-builder.Services.AddScoped<Eqcos.Api.Services.IStudentVerifier, Eqcos.Api.Services.ManualVerifier>();
+// список студентов техникума: пока тестовый файл; настоящая база = заменить FakeCollegeList в этой строке
+builder.Services.AddSingleton<Eqcos.Api.Services.ICollegeList, Eqcos.Api.Services.FakeCollegeList>();
+// сверка со списком (выключатель "College" в appsettings.json)
+builder.Services.AddScoped<Eqcos.Api.Services.College>();
 // уборка при запуске и раз в час: забытые заявки, старые причины отклонения
 builder.Services.AddHostedService<Eqcos.Api.Services.Cleanup>();
 // письма (коды подтверждения, «пароль изменён»)

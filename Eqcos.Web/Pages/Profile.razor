@@ -104,7 +104,14 @@ else
                         {
                             <div class="alert alert-danger py-2 mt-3 mb-0">@profile.DataBlock.</div>
                         }
-                        <button class="btn eq-btn eq-btn-blue mt-3" @onclick="StartEdit">Изменить</button>
+                        @if (profile.DataLocked)
+                        {
+                            <div class="small text-muted mt-3">Данные берутся из списка техникума. Если они неверны, обратитесь в учебную часть.</div>
+                        }
+                        else
+                        {
+                            <button class="btn eq-btn eq-btn-blue mt-3" @onclick="StartEdit">Изменить</button>
+                        }
 
                         @* ---- Доступ к записи: так студент видит порядочность (без слов «уровень» и «рейтинг») ---- *@
                         <h5 class="mt-4">Доступ к записи</h5>
@@ -179,12 +186,7 @@ else
                             }
                         </span>
                     </div>
-                    @if (profile.Email == null && profile.Phone == null)
-                    {
-                        <div class="small text-muted mb-2">
-                            Без @(Auth.SmsEnabled ? "почты или телефона" : "почты") сброс пароля недоступен, только через учебную часть.
-                        </div>
-                    }
+                   
                     @if (profile.Email != null && !changingEmail)
                     {
                         <button class="btn btn-outline-primary btn-sm mt-2" @onclick="() => changingEmail = true">Сменить почту</button>
@@ -196,7 +198,7 @@ else
                 </div>
 
                 @* ---- Телефон (только если SMS включены на сервере) ---- *@
-                @if (Auth.SmsEnabled)
+                @if (Auth.SmsEnabled && profile.Role == "Student")
                 {
                     <h5 class="mt-4">Телефон</h5>
                     <div style="max-width:420px">
@@ -269,13 +271,13 @@ else
     [SupplyParameterFromQuery] public string? Tab { get; set; }
 
     private record ProfileDto(string Login, string FullName, string Group, string Role, int? OfficeId, string? Office,
-                              string Status, string? RejectReason,
-                              string? PendingFullName, string? PendingGroup,
-                              int? PendingOfficeId, string? PendingOffice, string? PendingReason,
-                              int Access, string AccessName, string? Punishment, DateTime? NextDrop,
-                              string? DataBlock, List<string> Warnings, string? Email,
-                              string? EmailFull, string? TempPassword,
-                              string? Phone, string? PhoneFull);
+        string Status, string? RejectReason,
+        string? PendingFullName, string? PendingGroup,
+        int? PendingOfficeId, string? PendingOffice, string? PendingReason,
+        int Access, string AccessName, string? Punishment, DateTime? NextDrop,
+        string? DataBlock, List<string> Warnings, string? Email,
+        string? EmailFull, string? TempPassword,
+        string? Phone, string? PhoneFull, bool DataLocked);
     private record PasswordResult(string Text, string Token);   // ответ на смену пароля: текст и новый пропуск
     private record MyBookingDto(int Id, string Text, bool CanCancel);
 

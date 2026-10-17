@@ -24,6 +24,50 @@ else if (list == null)
 }
 else
 {
+    @* ---- Список техникума: режим и поиск (только если список подключён на сервере) ---- *@
+    @if (mode.Enabled)
+    {
+        <div class="card mb-3" style="max-width:760px">
+            <div class="card-body">
+                <h5 class="card-title">Список техникума</h5>
+                <div class="small text-muted mb-2">
+                    @if (mode.Sync)
+                    {
+                        <div>Синхронизация включена: ФИО, группа и корпус студентов берутся из списка (при входе, при открытии профиля и раз в час). Ни студент, ни админ сами их не меняют.</div>
+                    }
+                    @if (mode.Auto)
+                    {
+                        <span>
+                            Автоматическая проверка включена: новые регистрации подтверждаются и отклоняются сами.
+                            Здесь остаются изменения данных, переводы и заявки, поданные раньше.
+                        </span>
+                    }
+                    else
+                    {
+                        <span>Проверка вручную: сверка каждой заявки — в колонке «Список техникума».</span>
+                    }
+                </div>
+                <input class="form-control" style="max-width:320px" placeholder="Номер или фамилия"
+                       @bind="collegeQuery" @bind:event="oninput" @bind:after="CollegeTyped" />
+                @if (found.Count > 0)
+                {
+                    <table class="table table-sm mt-2 mb-0">
+                        <tbody>
+                            @foreach (var f in found)
+                            {
+                                <tr><td>@f.Login</td><td>@f.FullName</td><td>@f.Group</td><td>@f.Office</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else if (collegeQuery.Trim() != "" && searched)
+                {
+                    <div class="small text-muted mt-2">В списке техникума не найдено</div>
+                }
+            </div>
+        </div>
+    }
+
     <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="Load">Обновить</button>
 
     @if (message != null)
@@ -50,7 +94,19 @@ else
 
         <table class="table align-middle">
             <thead>
-                <tr><th></th><th>Студенческий</th><th>Заявка</th><th>ФИО</th><th>Группа</th><th>Корпус</th><th></th></tr>
+                <tr>
+                    <th></th>
+                    <th>Студенческий</th>
+                    <th>Заявка</th>
+                    <th>ФИО</th>
+                    <th>Группа</th>
+                    <th>Корпус</th>
+                    @if (mode.Enabled)
+                    {
+                        <th>Список техникума</th>
+                    }
+                    <th></th>
+                </tr>
             </thead>
             <tbody>
                 @foreach (var s in list)
@@ -99,6 +155,19 @@ else
                             <EqSelect Items="@officeItems" Value="@(s.TargetOfficeId ?? 0)"
                                       ValueChanged="@(id => Move(s.Id, id))" />
                         </td>
+                        @if (mode.Enabled)
+                        {
+                            <td class="small" style="max-width:220px">
+                                @if (s.College?.Ok == true)
+                                {
+                                    <span class="text-success">✓ совпадает</span>
+                                }
+                                else if (s.College != null)
+                                {
+                                    <span class="text-danger">✗ @s.College.Details</span>
+                                }
+                            </td>
+                        }
                         <td>
                             <div class="d-flex gap-2">
                                 <button class="btn btn-sm btn-success" @onclick="() => Approve(s.Id)">Подтвердить</button>
@@ -117,8 +186,12 @@ else
 @code {
     private record RequestDto(int Id, string Login, string Kind, string? Reason,
                               string FullName, string Group, string? Office,
-                              string? NewFullName, string? NewGroup, string? NewOffice, int? TargetOfficeId);
+                              string? NewFullName, string? NewGroup, string? NewOffice, int? TargetOfficeId,
+                              CollegeDto? College);
     private record OfficeDto(int Id, string Name);
+    private record CollegeDto(bool Ok, string Short, string Details);   // сверка со списком техникума
+    private record CollegeMode(bool Enabled, bool Auto, bool Sync);
+    private record CollegeStudentDto(string Login, string FullName, string Group, string? Office);
 
     private List<RequestDto>? list;
     private List<SelectItem> officeItems = new();
@@ -127,12 +200,19 @@ else
     private string bulkReason = "";
     private string? message;
 
+    private CollegeMode mode = new(false, false, false);
+    private string collegeQuery = "";
+    private List<CollegeStudentDto> found = new();
+    private bool searched;                          // поиск уже отработал (чтобы не мигало «не найдено»)
+    private CancellationTokenSource? searchDelay;   // чтобы не искать на каждую букву
+
     protected override async Task OnInitializedAsync()
     {
         if (Auth.Role != "Admin")
             return;
         var offices = (await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices"))!;
         officeItems = offices.Select(o => new SelectItem(o.Id, o.Name)).ToList();
+        mode = (await Http.GetFromJsonAsync<CollegeMode>("api/requests/college"))!;
         await Load();
     }
 
@@ -141,12 +221,34 @@ else
         list = await Http.GetFromJsonAsync<List<RequestDto>>("api/requests");
 
         // у каждой строки своё поле "Причина"
+        // если список техникума нашёл расхождение — сразу подставляем причину (админ может исправить)
         foreach (var s in list!)
             if (!reasons.ContainsKey(s.Id))
-                reasons[s.Id] = "";
+                reasons[s.Id] = s.College != null && !s.College.Ok
+                    ? char.ToUpper(s.College.Short[0]) + s.College.Short.Substring(1)
+                    : "";
 
         // галочки только у тех, кто ещё в списке
         selected.IntersectWith(list.Select(s => s.Id));
+    }
+
+    // поиск в списке техникума: ждём 300 мс после последней буквы
+    private async Task CollegeTyped()
+    {
+        searched = false;
+        searchDelay?.Cancel();
+        searchDelay = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(300, searchDelay.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        found = await Http.GetFromJsonAsync<List<CollegeStudentDto>>(
+            $"api/requests/college/search?q={Uri.EscapeDataString(collegeQuery)}") ?? new();
+        searched = true;
     }
 
     private void Toggle(int id, bool on)

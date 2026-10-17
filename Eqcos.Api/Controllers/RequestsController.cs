@@ -18,10 +18,12 @@ public record MoveRequest(int OfficeId);   // передать заявку в �
 public class RequestsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly College _college;
 
-    public RequestsController(AppDbContext db)
+    public RequestsController(AppDbContext db, College college)
     {
         _db = db;
+        _college = college;   // сверка со списком техникума
     }
 
     // корпус админа из пропуска: он видит заявки только своего корпуса
@@ -77,7 +79,33 @@ public class RequestsController : ControllerBase
             NewFullName = u.PendingFullName,  // новые (только у изменения)
             NewGroup = u.PendingGroup,
             NewOffice = OfficeName(u.PendingOfficeId),
-            TargetOfficeId = TargetOffice(u)  // корпус, в котором сейчас лежит заявка
+            TargetOfficeId = TargetOffice(u), // корпус, в котором сейчас лежит заявка
+            // сверка со списком техникума по тем данным, что сейчас в заявке (null — список не подключён)
+            College = _college.Enabled
+                ? _college.Check(u.Login, u.PendingFullName ?? u.FullName, u.PendingGroup ?? u.Group, TargetOffice(u))
+                : null
+        }));
+    }
+
+    // подключён ли список техникума и включена ли автоматика: сайт решает, что показывать
+    [HttpGet("college")]
+    public IActionResult CollegeMode() => Ok(new { _college.Enabled, _college.Auto, _college.Sync });
+
+    // поиск в списке техникума: номер или фамилия (как в «Вызове»)
+    [HttpGet("college/search")]
+    public IActionResult CollegeSearch(string? q)
+    {
+        if (!_college.Enabled)
+            return BadRequest("Список техникума не подключён");
+        if (string.IsNullOrWhiteSpace(q))
+            return Ok(Array.Empty<object>());
+
+        return Ok(_college.Search(q.Trim()).Select(s => new
+        {
+            s.Login,
+            s.FullName,
+            s.Group,
+            Office = OfficeName(s.OfficeId)
         }));
     }
 

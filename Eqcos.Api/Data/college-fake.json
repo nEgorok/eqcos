@@ -1,0 +1,98 @@
+[
+  {
+    "login": "1001",
+    "lastName": "Иванов",
+    "firstName": "Иван",
+    "middleName": "Иванович",
+    "group": "204Лг",
+    "officeId": 1
+  },
+  {
+    "login": "1002",
+    "lastName": "Петрова",
+    "firstName": "Анна",
+    "middleName": "Сергеевна",
+    "group": "204Лг",
+    "officeId": 1
+  },
+  {
+    "login": "1003",
+    "lastName": "Сидоров",
+    "firstName": "Алексей",
+    "middleName": "Петрович",
+    "group": "311Кп",
+    "officeId": 1
+  },
+  {
+    "login": "1004",
+    "lastName": "Кузнецова",
+    "firstName": "Мария",
+    "middleName": "Олеговна",
+    "group": "111Бп",
+    "officeId": 1
+  },
+  {
+    "login": "1005",
+    "lastName": "Смирнов",
+    "firstName": "Дмитрий",
+    "middleName": "",
+    "group": "111А",
+    "officeId": 1
+  },
+  {
+    "login": "2001",
+    "lastName": "Волков",
+    "firstName": "Артём",
+    "middleName": "Андреевич",
+    "group": "205Тда",
+    "officeId": 2
+  },
+  {
+    "login": "2002",
+    "lastName": "Фёдорова",
+    "firstName": "Ольга",
+    "middleName": "Игоревна",
+    "group": "205Тда",
+    "officeId": 2
+  },
+  {
+    "login": "2003",
+    "lastName": "Морозов",
+    "firstName": "Никита",
+    "middleName": "Владимирович",
+    "group": "402Э",
+    "officeId": 2
+  },
+  {
+    "login": "3001",
+    "lastName": "Новиков",
+    "firstName": "Егор",
+    "middleName": "Романович",
+    "group": "103Св",
+    "officeId": 3
+  },
+  {
+    "login": "3002",
+    "lastName": "Лебедева",
+    "firstName": "Дарья",
+    "middleName": "Максимовна",
+    "group": "103Св",
+    "officeId": 3
+  },
+  {
+    "login": "3003",
+    "lastName": "Козлов",
+    "firstName": "Илья",
+    "middleName": "Денисович",
+    "group": "301М",
+    "officeId": 3
+  },
+  {
+    "login": "4321",
+    "lastName": "Смирнова",
+    "firstName": "Виктория",
+    "middleName": "Андреевна",
+    "group": "111Бп",
+    "officeId": 1
+  }
+]

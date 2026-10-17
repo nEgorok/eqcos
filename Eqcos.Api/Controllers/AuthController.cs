@@ -26,14 +26,14 @@ public class AuthController : ControllerBase
     private readonly IConfiguration _config;
     private readonly PasswordHasher<User> _hasher = new();
 
-    private readonly IStudentVerifier _verifier;
+    private readonly College _college;
     private readonly Mailer _mailer;
 
-    public AuthController(AppDbContext db, IConfiguration config, IStudentVerifier verifier, Mailer mailer)
+    public AuthController(AppDbContext db, IConfiguration config, College college, Mailer mailer)
     {
         _db = db;
         _config = config;
-        _verifier = verifier;   // сервер сам подставит ManualVerifier (см. Program.cs)
+        _college = college;     // сверка со списком техникума
         _mailer = mailer;       // письмо «Пароль изменён»
     }
 
@@ -77,7 +77,19 @@ public class AuthController : ControllerBase
         };
         user.PasswordHash = _hasher.HashPassword(user, r.Password!); // пароль -> отпечаток
 
-        user.Status = _verifier.Check(user);   // сразу подтвердить или ждать админа
+        // список техникума в автоматическом режиме: сверяем и сразу решаем сами
+        if (_college.Auto)
+
+        {            // корпус берём из списка: ошибся корпусом — не отказ, просто ставим правильный
+            user.OfficeId = _college.OfficeOf(login) ?? user.OfficeId;
+
+            var check = _college.Check(login, user.FullName, user.Group, user.OfficeId);
+            if (!check.Ok)
+                return BadRequest($"Регистрация отклонена: {check.Short}. Проверьте данные или обратитесь в учебную часть.");
+            user.Status = "Approved";
+        }
+        else
+            user.Status = "Pending";   // ждёт проверки админом
 
         _db.Users.Add(user);
         // зарегистрировался заново — старая причина отклонения больше не нужна
@@ -106,6 +118,9 @@ public class AuthController : ControllerBase
         // заблокирована за подозрительные действия — говорим только при верном пароле
         if (user.Blocked)
             return Unauthorized("Учётная запись заблокирована из-за подозрительных действий. Обратитесь в учебную часть.");
+        // синхронизация со списком техникума: свежие ФИО, группа, корпус
+        if (_college.Pull(user))
+            _db.SaveChanges();
         // hasEmail: есть ли чем сбросить пароль (почта или телефон); нет — сайт напомнит привязать
         return Ok(new { token = CreateToken(user), role = user.Role, fullName = user.FullName, hasEmail = user.Email != null || user.Phone != null });
     }
