@@ -5,7 +5,7 @@ using Microsoft.JSInterop;
 namespace Eqcos.Web.Services;
 
 // что сервер возвращает при входе
-public record LoginResult(string Token, string Role, string FullName);
+public record LoginResult(string Token, string Role, string FullName, bool HasEmail);
 
 // помнит, кто вошёл, и прикладывает пропуск к запросам
 public class AuthService
@@ -16,6 +16,7 @@ public class AuthService
     public string? Token { get; private set; }
     public string? Role { get; private set; }
     public string? FullName { get; private set; }
+    public bool HasEmail { get; private set; }   // привязана ли почта (нет — напоминаем)
     public bool IsLoggedIn => Token != null;
 
     public event Action? Changed;
@@ -36,6 +37,7 @@ public class AuthService
         Token = token;
         Role = await _js.InvokeAsync<string?>("sessionStorage.getItem", "role");
         FullName = await _js.InvokeAsync<string?>("sessionStorage.getItem", "fullName");
+        HasEmail = await _js.InvokeAsync<string?>("sessionStorage.getItem", "hasEmail") == "1";
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
     }
 
@@ -50,11 +52,13 @@ public class AuthService
         Token = data.Token;
         Role = data.Role;
         FullName = data.FullName;
+        HasEmail = data.HasEmail;
 
         // запомнить во вкладке, чтобы пережить обновление страницы
         await _js.InvokeVoidAsync("sessionStorage.setItem", "token", Token);
         await _js.InvokeVoidAsync("sessionStorage.setItem", "role", Role);
         await _js.InvokeVoidAsync("sessionStorage.setItem", "fullName", FullName);
+        await _js.InvokeVoidAsync("sessionStorage.setItem", "hasEmail", HasEmail ? "1" : "0");
 
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
         Changed?.Invoke();
@@ -68,9 +72,26 @@ public class AuthService
         await _js.InvokeVoidAsync("sessionStorage.setItem", "fullName", name);
         Changed?.Invoke();
     }
+    // почту привязали — убрать напоминания
+    public async Task SetHasEmail()
+    {
+        HasEmail = true;
+        await _js.InvokeVoidAsync("sessionStorage.setItem", "hasEmail", "1");
+        Changed?.Invoke();
+    }
+
+    // сменили пароль — сервер выдал новый пропуск (старые на других устройствах больше не действуют)
+    public async Task SetToken(string token)
+    {
+        Token = token;
+        await _js.InvokeVoidAsync("sessionStorage.setItem", "token", token);
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
     public async Task Logout()
     {
         Token = Role = FullName = null;
+        HasEmail = false;
         await _js.InvokeVoidAsync("sessionStorage.clear");
         _http.DefaultRequestHeaders.Authorization = null;
         Changed?.Invoke();

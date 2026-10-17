@@ -175,6 +175,46 @@ namespace Eqcos.Api.Migrations
                     b.ToTable("ConductEvents");
                 });
 
+            modelBuilder.Entity("Eqcos.Api.Models.EmailCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Used")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("EmailCodes");
+                });
+
             modelBuilder.Entity("Eqcos.Api.Models.GroupCode", b =>
                 {
                     b.Property<int>("Id")
@@ -473,6 +513,9 @@ namespace Eqcos.Api.Migrations
                     b.Property<DateTime?>("DataUntil")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Email")
+                        .HasColumnType("text");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -532,6 +575,9 @@ namespace Eqcos.Api.Migrations
 
                     b.Property<DateTime?>("StrikesFrom")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("TokenVersion")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

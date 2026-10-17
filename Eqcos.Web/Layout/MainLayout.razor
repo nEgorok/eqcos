@@ -24,7 +24,14 @@
 
         @if (Auth.IsLoggedIn)
         {
-            <NavLink class="eq-user" href="profile" title="Профиль">👤 @Auth.FullName</NavLink>
+            <div class="eq-userbox">
+                @* админу — скромное напоминание серой строкой; студенту — плашка на главной *@
+                @if (Auth.Role == "Admin" && !Auth.HasEmail)
+                {
+                    <a class="eq-noemail" href="profile?tab=settings">почта не привязана</a>
+                }
+                <NavLink class="eq-user" href="profile" title="Профиль">👤 @Auth.FullName</NavLink>
+            </div>
         }
     </div>
 

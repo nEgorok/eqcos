@@ -38,6 +38,9 @@
                 <input class="form-control mb-2" placeholder="@(mode == "staff" ? "Логин" : "Номер студенческого")" @bind="login" />
                 <PasswordInput Class="mb-3" Placeholder="Пароль" @bind-Value="password" />
                 <button class="btn btn-primary w-100 eq-submit" @onclick="DoLogin">Войти</button>
+                <div class="text-center mt-2">
+                    <a class="small" href="@(mode == "staff" ? "reset?staff=1" : "reset")">Забыли пароль?</a>
+                </div>
             }
             @if (notice != null)
             {
@@ -95,7 +98,9 @@
              : path.StartsWith("/register") ? "register"
              : "login";
         error = null;
-        notice = Nav.Uri.Contains("expired=1") ? "Сессия истекла. Войдите снова." : null;
+        notice = Nav.Uri.Contains("expired=1") ? "Сессия истекла. Войдите снова."
+               : Nav.Uri.Contains("reset=1") ? "Пароль изменён. Войдите с новым паролем."
+               : null;
     }
 
     // ушли со страницы — отписаться
@@ -136,9 +141,9 @@
             return;
         }
 
-        // сразу входим, чтобы не вводить пароль второй раз
+        // сразу входим, чтобы не вводить пароль второй раз, и предлагаем привязать почту
         error = await Auth.Login(login, password);
         if (error == null)
-            Nav.NavigateTo("/");
+            Nav.NavigateTo("/welcome");
     }
 }

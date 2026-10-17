@@ -1,0 +1,36 @@
+﻿@page "/welcome"
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@* окно сразу после регистрации: предлагаем привязать почту, можно пропустить *@
+<PageTitle>Привяжите почту</PageTitle>
+
+<div class="eq-auth">
+    <div class="card eq-auth-card">
+        <div class="card-body">
+            <h1 class="eq-auth-title">Привяжите почту</h1>
+            <p class="small">Если забудете пароль, на почту придёт код для его сброса.</p>
+
+            <EmailBind Wide="true" OnDone="Done" />
+
+            <div class="text-center mt-3">
+                <a href="">Пропустить</a>
+            </div>
+            <div class="small text-muted text-center mt-1">
+                Без почты сброс пароля недоступен, только через учебную часть.
+                Привязать почту можно позже в профиле.
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsLoggedIn)
+            Nav.NavigateTo("login");   // сюда попадают только после регистрации
+    }
+
+    // привязали — на главную
+    private void Done(string text) => Nav.NavigateTo("/");
+}

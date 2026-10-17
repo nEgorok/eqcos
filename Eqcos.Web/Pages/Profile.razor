@@ -162,7 +162,25 @@ else
             @* ---- Настройки аккаунта ---- *@
             @if (tab == "settings")
             {
-                <h5>Сменить пароль</h5>
+                @* ---- Почта ---- *@
+                <h5>Почта</h5>
+                <div style="max-width:420px">
+                    <div class="eq-row"><span class="text-muted">Привязана</span><span>@(profile.Email ?? "нет")</span></div>
+                    @if (profile.Email == null)
+                    {
+                        <div class="small text-muted mb-2">Без почты сброс пароля недоступен, только через учебную часть.</div>
+                    }
+                    @if (profile.Email != null && !changingEmail)
+                    {
+                        <button class="btn btn-outline-primary btn-sm mt-2" @onclick="() => changingEmail = true">Сменить почту</button>
+                    }
+                    else
+                    {
+                        <div class="mt-2"><EmailBind NeedPassword="profile.Email != null" OnDone="EmailDone" /></div>
+                    }
+                </div>
+
+                <h5 class="mt-4">Сменить пароль</h5>
                 <div class="eq-enter" style="max-width:420px">
                     <PasswordInput Class="mb-2" Placeholder="Старый пароль" @bind-Value="oldPassword" />
                     <PasswordInput Class="mb-2" Placeholder="Новый пароль" @bind-Value="newPassword" />
@@ -183,7 +201,8 @@ else
                               string? PendingFullName, string? PendingGroup,
                               int? PendingOfficeId, string? PendingOffice, string? PendingReason,
                               int Access, string AccessName, string? Punishment, DateTime? NextDrop,
-                              string? DataBlock, List<string> Warnings);
+                              string? DataBlock, List<string> Warnings, string? Email);
+    private record PasswordResult(string Text, string Token);   // ответ на смену пароля: текст и новый пропуск
     private record MyBookingDto(int Id, string Text, bool CanCancel);
 
     // первая буква заглавная: «без ограничений» → «Без ограничений»
@@ -202,6 +221,7 @@ else
 
     private string tab = "data";       // открытый раздел: "bookings", "data" или "settings"
     private bool editing;              // нажали «Изменить»
+    private bool changingEmail;        // нажали «Сменить почту»
     private StudentForm form = new();  // поля для «Изменить»
 
     private string oldPassword = "";
@@ -237,6 +257,16 @@ else
         tab = to;
         message = null;
         editing = false;
+        changingEmail = false;
+    }
+
+    // почту привязали или сменили — показать ответ сервера и обновить адрес
+    private async Task EmailDone(string text)
+    {
+        ok = true;
+        message = text;
+        changingEmail = false;
+        await Load();
     }
 
     // «Изменить»: в полях — заявка на проверке, если она есть, иначе текущие данные
@@ -298,9 +328,19 @@ else
             return;
         }
 
-        await Show(await Http.PostAsJsonAsync("api/auth/password", new { oldPassword, newPassword }));
-        if (ok)
-            oldPassword = newPassword = repeat = "";
+        var resp = await Http.PostAsJsonAsync("api/auth/password", new { oldPassword, newPassword });
+        ok = resp.IsSuccessStatusCode;
+        if (!ok)
+        {
+            message = await resp.Content.ReadAsStringAsync();   // «Старый пароль введён неверно»
+            return;
+        }
+
+        // сервер выдал новый пропуск: старые (на других устройствах) больше не действуют, а этот — да
+        var data = (await resp.Content.ReadFromJsonAsync<PasswordResult>())!;
+        await Auth.SetToken(data.Token);
+        message = data.Text;
+        oldPassword = newPassword = repeat = "";
     }
 
     // «Выйти» — выходим и сразу открываем окно входа

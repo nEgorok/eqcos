@@ -1,0 +1,94 @@
+﻿@page "/reset"
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+@* «Забыли пароль?»: номер студенческого (или логин сотрудника) → код на почту → новый пароль *@
+<PageTitle>Сброс пароля</PageTitle>
+
+<div class="eq-auth">
+    <div class="card eq-auth-card">
+        <div class="card-body eq-enter">
+            <h1 class="eq-auth-title">Сброс пароля</h1>
+
+            @if (!sent)
+            {
+                <input class="form-control mb-2" placeholder="@(IsStaff ? "Логин" : "Номер студенческого")" @bind="login" />
+                <button class="btn btn-primary w-100 eq-submit" @onclick="SendCode">Отправить код на почту</button>
+            }
+            else
+            {
+                <div class="small mb-2">@info</div>
+                <input class="form-control mb-2" placeholder="Код из письма" inputmode="numeric" maxlength="6" @bind="code" />
+                <PasswordInput Class="mb-2" Placeholder="Новый пароль (не короче 6 символов)" @bind-Value="newPassword" />
+                <PasswordInput Class="mb-3" Placeholder="Повторите новый пароль" @bind-Value="repeat" />
+                <button class="btn btn-primary w-100 eq-submit" @onclick="Confirm">Сменить пароль</button>
+                <div class="text-center mt-2">
+                    <button class="btn btn-link btn-sm p-0" @onclick="SendCode">Отправить код ещё раз</button>
+                </div>
+            }
+
+            @if (error != null)
+            {
+                <div class="text-danger mt-2">@error</div>
+            }
+
+            <div class="eq-auth-foot">
+                <a href="@(IsStaff ? "staff" : "login")">Назад ко входу</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // reset?staff=1 — пришли из окна сотрудников
+    [SupplyParameterFromQuery(Name = "staff")] public int StaffFlag { get; set; }
+    private bool IsStaff => StaffFlag == 1;
+
+    private string login = "";
+    private string code = "";
+    private string newPassword = "";
+    private string repeat = "";
+    private bool sent;       // код отправлен — показываем поля для кода и нового пароля
+    private string? info;    // «Код отправлен на i***@mail.ru»
+    private string? error;
+
+    private async Task SendCode()
+    {
+        error = null;
+        if (login.Trim() == "")
+        {
+            error = IsStaff ? "Введите логин" : "Введите номер студенческого";
+            return;
+        }
+
+        var resp = await Http.PostAsJsonAsync("api/email/reset/send", new { login, staff = IsStaff });
+        var text = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
+        {
+            error = text;   // «не привязана почта», «слишком много писем»
+            return;
+        }
+        info = text;
+        sent = true;
+    }
+
+    private async Task Confirm()
+    {
+        error = null;
+        if (newPassword != repeat)
+        {
+            error = "Новые пароли не совпадают";
+            return;
+        }
+
+        var resp = await Http.PostAsJsonAsync("api/email/reset/confirm", new { login, code, newPassword, staff = IsStaff });
+        if (!resp.IsSuccessStatusCode)
+        {
+            error = await resp.Content.ReadAsStringAsync();
+            return;
+        }
+
+        // окно входа покажет «Пароль изменён. Войдите с новым паролем»
+        Nav.NavigateTo(IsStaff ? "staff?reset=1" : "login?reset=1");
+    }
+}

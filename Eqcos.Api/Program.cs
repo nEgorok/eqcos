@@ -33,6 +33,8 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<Eqcos.Api.Services.IStudentVerifier, Eqcos.Api.Services.ManualVerifier>();
 // уборка при запуске и раз в час: забытые заявки, старые причины отклонения
 builder.Services.AddHostedService<Eqcos.Api.Services.Cleanup>();
+// письма (коды подтверждения, «пароль изменён»)
+builder.Services.AddSingleton<Eqcos.Api.Services.Mailer>();
 // разрешаем сайту обращаться к API
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -54,18 +56,21 @@ app.UseCors();
 
 app.UseAuthentication();
 
-// пропуск есть, а пользователя уже нет (аккаунт удалили в другой вкладке) —
-// отвечаем «войдите снова» (401), а не падаем с ошибкой 500
+// пропуск есть, а пользователя уже нет (аккаунт удалили в другой вкладке),
+// его заблокировали или сменили пароль (версия входа выросла) —
+// отвечаем «войдите снова» (401), а не пускаем дальше
 app.Use(async (context, next) =>
 {
     var id = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
     if (int.TryParse(id, out var userId))
     {
+        // у старых пропусков (выданных до шага 25) версии нет — считаем её 0
+        var ver = int.TryParse(context.User.FindFirstValue("ver"), out var v) ? v : 0;
         var db = context.RequestServices.GetRequiredService<AppDbContext>();
-        if (!await db.Users.AnyAsync(u => u.Id == userId && !u.Blocked))   // удалили или заблокировали
+        if (!await db.Users.AnyAsync(u => u.Id == userId && !u.Blocked && u.TokenVersion == ver))
         {
             context.Response.StatusCode = 401;
-            await context.Response.WriteAsync("Учётная запись не найдена. Войдите снова.");
+            await context.Response.WriteAsync("Вход устарел. Войдите снова.");
             return;
         }
     }

@@ -27,12 +27,14 @@ public class AuthController : ControllerBase
     private readonly PasswordHasher<User> _hasher = new();
 
     private readonly IStudentVerifier _verifier;
+    private readonly Mailer _mailer;
 
-    public AuthController(AppDbContext db, IConfiguration config, IStudentVerifier verifier)
+    public AuthController(AppDbContext db, IConfiguration config, IStudentVerifier verifier, Mailer mailer)
     {
         _db = db;
         _config = config;
         _verifier = verifier;   // сервер сам подставит ManualVerifier (см. Program.cs)
+        _mailer = mailer;       // письмо «Пароль изменён»
     }
 
     // регистрация студента
@@ -99,10 +101,13 @@ public class AuthController : ControllerBase
             return Unauthorized("Неверный логин или пароль");
         // студент — только через студенческое окно, админ — только через окно сотрудников
         var isAdmin = user.Role == "Admin";
+        if (isAdmin != r.Staff)
+            return Unauthorized("Неверный логин или пароль");
         // заблокирована за подозрительные действия — говорим только при верном пароле
         if (user.Blocked)
             return Unauthorized("Учётная запись заблокирована из-за подозрительных действий. Обратитесь в учебную часть.");
-        return Ok(new { token = CreateToken(user), role = user.Role, fullName = user.FullName });
+        // hasEmail: без почты сайт напомнит её привязать
+        return Ok(new { token = CreateToken(user), role = user.Role, fullName = user.FullName, hasEmail = user.Email != null });
     }
     // учётку отклонили и стёрли: при верном пароле объясняем почему (30 дней).
     // С неверным паролем — обычное «Неверный логин или пароль», чтобы чужой не узнал причину.
@@ -130,7 +135,7 @@ public class AuthController : ControllerBase
     // смена пароля: для любого вошедшего (студент или админ)
     [Authorize]
     [HttpPost("password")]
-    public IActionResult ChangePassword(ChangePasswordRequest r)
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest r)
     {
         var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var user = _db.Users.Find(id);
@@ -149,8 +154,14 @@ public class AuthController : ControllerBase
             return BadRequest("Новый пароль совпадает со старым");
 
         user.PasswordHash = _hasher.HashPassword(user, r.NewPassword);   // новый отпечаток
+        user.TokenVersion++;   // на других устройствах вход закроется
         _db.SaveChanges();
-        return Ok("Пароль изменён");
+
+        if (user.Email != null)
+            await _mailer.Send(user.Email, "Пароль изменён", "Пароль от вашей учётной записи в электронной очереди изменён.");
+
+        // этому устройству — новый пропуск, чтобы его не выкинуло вместе с остальными
+        return Ok(new { text = "Пароль изменён. На других устройствах нужно будет войти заново", token = CreateToken(user) });
     }
     // собираем пропуск: кто это и какая роль
     private string CreateToken(User user)
@@ -160,7 +171,8 @@ public class AuthController : ControllerBase
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Name, user.Login),
             new Claim(ClaimTypes.Role, user.Role),
-            new Claim("office", user.OfficeId?.ToString() ?? "")   // корпус админа
+            new Claim("office", user.OfficeId?.ToString() ?? ""),   // корпус админа
+            new Claim("ver", user.TokenVersion.ToString())          // версия входа: сменили пароль — пропуск устарел
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));

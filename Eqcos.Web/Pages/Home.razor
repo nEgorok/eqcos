@@ -39,6 +39,14 @@
         Исправьте данные в <a href="profile?tab=data">профиле</a>, и они снова уйдут на проверку.
     </div>
 }
+@if (Auth.IsLoggedIn && Auth.Role == "Student" && !Auth.HasEmail)
+{
+    @* почта не привязана: напоминаем, пока не привяжет *@
+    <div class="alert alert-info">
+        Почта не привязана: без неё не получится сбросить пароль, если вы его забудете.
+        <a href="profile?tab=settings">Привязать почту</a>
+    </div>
+}
 @if (me != null && me.Status == "Approved" && (me.PendingFullName != null || me.PendingGroup != null))
 {
     <div class="alert alert-warning">

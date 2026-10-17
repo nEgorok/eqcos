@@ -638,3 +638,19 @@ h2 {
     .eq-sort:hover {
         color: var(--bs-primary);
     }
+/* ===== Шаг 25: почта ===== */
+.eq-userbox {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.eq-noemail {
+    font-size: 0.75rem;
+    color: #8a8f98;
+    text-decoration: none;
+}
+
+    .eq-noemail:hover {
+        text-decoration: underline;
+    }

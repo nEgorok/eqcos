@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<RejectedAccount> RejectedAccounts { get; set; }
     public DbSet<AdminLog> AdminLogs { get; set; }
     public DbSet<ConductEvent> ConductEvents { get; set; }
+    public DbSet<EmailCode> EmailCodes { get; set; }
     // начальные данные: три корпуса сразу попадут в базу при миграции
     protected override void OnModelCreating(ModelBuilder mb)
     {
