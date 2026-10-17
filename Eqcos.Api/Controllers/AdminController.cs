@@ -27,7 +27,7 @@ public record AdminBooking(
 // панель учебной части: очередь, история, отметки, удаление
 [ApiController]
 [Route("api/admin")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Secretary")]   // вызов — оба; очередь, история, отметки — только заведующая (см. у методов)
 public class AdminController : ControllerBase
 {
     private const int NoShowDays = 3;   // «Не пришёл» и исправление отметки — в течение 3 рабочих дней
@@ -43,6 +43,7 @@ public class AdminController : ControllerBase
         int.TryParse(User.FindFirst("office")?.Value, out var id) ? id : null;
 
     // ОЧЕРЕДЬ: действующие записи своего корпуса на сегодня
+    [Authorize(Roles = "Admin")]
     [HttpGet("queue")]
     public IActionResult GetQueue()
     {
@@ -65,6 +66,7 @@ public class AdminController : ControllerBase
     }
 
     // ИСТОРИЯ: все записи своего корпуса за период (новые сверху)
+    [Authorize(Roles = "Admin")]
     [HttpGet("history")]
     public IActionResult GetHistory(DateOnly from, DateOnly to, bool showCancelled = false, string? search = null)
     {
@@ -147,6 +149,7 @@ public class AdminController : ControllerBase
     }
 
     // ОТМЕТКА: «Пришёл» или «Не пришёл». Исправить ошибочную отметку можно один раз.
+    [Authorize(Roles = "Admin")]
     [HttpPost("bookings/{id}/mark")]
     public IActionResult Mark(int id, MarkRequest r)
     {
@@ -196,6 +199,7 @@ public class AdminController : ControllerBase
     }
 
     // УДАЛЕНИЕ записи с причиной + уведомление студенту
+    [Authorize(Roles = "Admin")]
     [HttpPost("bookings/{id}/delete")]
     public IActionResult Delete(int id, DeleteRequest r)
     {

@@ -118,7 +118,12 @@
     {
         error = await Auth.Login(login, password, mode == "staff");
         if (error == null)
-            Nav.NavigateTo(Auth.Role == "Admin" ? "/admin" : "/");   // админ — к записям, студент — на главную
+            Nav.NavigateTo(Auth.Role switch
+            {
+                "Admin" => "/admin",          // заведующая — к очереди
+                "Secretary" => "/requests",   // секретарь — к заявкам
+                _ => "/"                      // студент — на главную
+            });
     }
 
     private async Task DoRegister()

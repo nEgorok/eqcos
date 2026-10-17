@@ -14,7 +14,7 @@
     <option value="Такого студента нет в списках"></option>
 </datalist>
 
-@if (Auth.Role != "Admin")
+@if (Auth.Role != "Secretary")
 {
     <p>Нет доступа. Войдите как администратор.</p>
 }
@@ -208,7 +208,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        if (Auth.Role != "Admin")
+        if (Auth.Role != "Secretary")
             return;
         var offices = (await Http.GetFromJsonAsync<List<OfficeDto>>("api/offices"))!;
         officeItems = offices.Select(o => new SelectItem(o.Id, o.Name)).ToList();

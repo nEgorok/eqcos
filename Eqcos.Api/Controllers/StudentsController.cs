@@ -17,16 +17,18 @@ public record StudentDelete(string? Reason);
 // вкладка «Студенты»: список, карточка, правка, удаление
 [ApiController]
 [Route("api/students")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Secretary")]   // заведующая и секретарь
 public class StudentsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly Mailer _mailer;
+    private readonly College _college;
 
-    public StudentsController(AppDbContext db, Mailer mailer)
+    public StudentsController(AppDbContext db, Mailer mailer, College college)
     {
         _db = db;
         _mailer = mailer;
+        _college = college;   // синхронизация со списком техникума
     }
 
     // корпус и логин админа из пропуска
@@ -111,6 +113,7 @@ public class StudentsController : ControllerBase
             Phone = Phones.Mask(u.Phone),       // скрыто; null — телефон не привязан
             CreatedAt = u.CreatedAt == null ? (DateTime?)null : Clock.ToMsk(u.CreatedAt.Value),
             HasRequest = u.PendingFullName != null || u.PendingGroup != null || u.PendingOfficeId != null,
+            DataLocked = _college.Sync,   // данные из списка техникума: менять их надо там
             // итоги по своим записям (вызовы не считаем)
             Came = bookings.Count(b => b.Status == BookingStatus.Came && purposes.GetValueOrDefault(b.PurposeId)?.AdminOnly != true),
             NoShow = bookings.Count(b => b.Status == BookingStatus.NoShow && purposes.GetValueOrDefault(b.PurposeId)?.AdminOnly != true),
@@ -242,6 +245,8 @@ public class StudentsController : ControllerBase
     [HttpPut("{id}")]
     public IActionResult Edit(int id, StudentEdit r)
     {
+        if (_college.Sync)
+            return BadRequest("Данные берутся из списка техникума: исправьте их там, здесь они обновятся сами");
         var u = FindStudent(id);
         if (u == null)
             return NotFound("Студент не найден");

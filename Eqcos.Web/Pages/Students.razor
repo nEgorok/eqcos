@@ -6,7 +6,7 @@
 <PageTitle>Студенты</PageTitle>
 <h1>Студенты</h1>
 
-@if (Auth.Role != "Admin")
+@if (!Auth.IsStaff)
 {
     <p>Нет доступа. Войдите как администратор.</p>
 }
@@ -100,7 +100,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        if (Auth.Role == "Admin")
+        if (Auth.IsStaff)
             await Load();
     }
 

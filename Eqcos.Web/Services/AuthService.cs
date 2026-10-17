@@ -19,6 +19,8 @@ public class AuthService
     public bool HasEmail { get; private set; }   // привязана ли почта или телефон (нет — напоминаем)
     public bool SmsEnabled { get; private set; } // включены ли SMS на сервере (нет — телефон нигде не показываем)
     public bool IsLoggedIn => Token != null;
+    public bool IsStaff => Role is "Admin" or "Secretary";   // сотрудник: заведующая или секретарь
+    public bool IsSecretary => Role == "Secretary";
 
     public event Action? Changed;
 

@@ -7,17 +7,25 @@
     @* ---- Верхняя строка: меню ---- *@
     <div class="eq-container eq-topline">
         <nav class="eq-nav">
-            @if (Auth.Role != "Admin")
+            @if (!Auth.IsStaff)
             {
                 <NavLink href="" Match="NavLinkMatch.All">Запись</NavLink>
             }
             @if (Auth.Role == "Admin")
             {
+                @* заведующая: очередь и всё, что с ней связано *@
                 <NavLink href="admin" Match="NavLinkMatch.All">Очередь</NavLink>
                 <NavLink href="admin/history">История</NavLink>
                 <NavLink href="admin/summon">Вызов</NavLink>
                 <NavLink href="admin/close">Закрытие</NavLink>
+                <NavLink href="admin/students">Студенты</NavLink>
+            }
+            @if (Auth.IsSecretary)
+            {
+                @* секретарь: заявки, вызов, закрытие, студенты (позже — справки) *@
                 <NavLink href="requests">Заявки</NavLink>
+                <NavLink href="admin/summon">Вызов</NavLink>
+                <NavLink href="admin/close">Закрытие</NavLink>
                 <NavLink href="admin/students">Студенты</NavLink>
             }
         </nav>
@@ -26,7 +34,7 @@
         {
             <div class="eq-userbox">
                 @* админу — скромное напоминание серой строкой; студенту — плашка на главной *@
-                @if (Auth.Role == "Admin" && !Auth.HasEmail)
+                @if (Auth.IsStaff && !Auth.HasEmail)
                 {
                     <a class="eq-noemail" href="profile?tab=settings">почта не привязана</a>
                 }

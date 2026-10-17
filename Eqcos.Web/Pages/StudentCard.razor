@@ -8,7 +8,7 @@
 
 <a class="small" href="admin/students">← Все студенты</a>
 
-@if (Auth.Role != "Admin")
+@if (!Auth.IsStaff)
 {
     <p>Нет доступа. Войдите как администратор.</p>
 }
@@ -51,7 +51,10 @@ else
                     <div class="alert alert-warning py-2 mt-2 mb-0">Есть заявка на изменение данных — она во вкладке «Заявки».</div>
                 }
                 <div class="d-flex gap-2 mt-3 flex-wrap">
-                    <button class="btn eq-btn eq-btn-blue" @onclick="StartEdit">Изменить</button>
+                    @if (!card.DataLocked)
+                    {
+                        <button class="btn eq-btn eq-btn-blue" @onclick="StartEdit">Изменить</button>
+                    }
                     <button class="btn btn-outline-secondary" @onclick="ResetPassword">Сбросить пароль</button>
                 </div>
                 @if (tempPassword != null)
@@ -225,7 +228,7 @@ else
                               int Requests, int DataLimit, int DataWarnings, int DataBlockAt, DateTime? DataUntil,
                               bool Blocked, List<EventDto> Events);
     private record CardDto(int Id, string Login, string FullName, string Group, int? OfficeId, string? Office,
-                                string Status, string? Email, string? Phone, DateTime? CreatedAt, bool HasRequest,
+                                string Status, string? Email, string? Phone, DateTime? CreatedAt, bool HasRequest, bool DataLocked,
                            int Came, int NoShow, int Cancelled,
                            List<HistoryDto> History, List<LogDto> Log, ConductDto Conduct);
 
@@ -239,7 +242,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        if (Auth.Role == "Admin")
+        if (Auth.IsStaff)
             await Load();
     }
 

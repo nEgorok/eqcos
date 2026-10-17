@@ -210,7 +210,7 @@ public class SlotsController : ControllerBase
     // поставить студенту вызов на профбеседу.
     // Если на это время записаны студенты — их записи переносятся по порядку очереди,
     // но сначала сервер спрашивает админа (ответ 409 Conflict с вопросом).
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Secretary")]   // вызов ставят заведующая и секретарь
     [HttpPost("slots/summon")]
     public IActionResult Summon(SummonRequest r)
     {

@@ -25,7 +25,7 @@ public class ClosuresController : ControllerBase
         int.TryParse(User.FindFirst("office")?.Value, out var id) ? id : null;
 
     // АДМИН: закрытия СВОЕГО корпуса на день
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Secretary")]   // закрыть время может и секретарь (заведующая заболела и позвонила)
     [HttpGet("mine")]
     public IActionResult GetMine(DateOnly date)
     {
@@ -36,7 +36,7 @@ public class ClosuresController : ControllerBase
     }
 
     // АДМИН: закрыть время (+ автоперенос записей)
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Secretary")]   // закрыть время может и секретарь (заведующая заболела и позвонила)
     [HttpPost]
     public IActionResult Close(CloseRequest r)
     {
@@ -86,7 +86,7 @@ public class ClosuresController : ControllerBase
     }
 
     // АДМИН: открыть время обратно
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Secretary")]   // закрыть время может и секретарь (заведующая заболела и позвонила)
     [HttpDelete("{id}")]
     public IActionResult Open(int id)
     {

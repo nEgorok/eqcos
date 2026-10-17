@@ -190,7 +190,6 @@ public class EmailController : ControllerBase
     private User? FindForReset(string? login, bool staff)
     {
         var l = (login ?? "").Trim();
-        var role = staff ? "Admin" : "Student";
-        return _db.Users.FirstOrDefault(u => u.Login == l && u.Role == role);
+        return _db.Users.FirstOrDefault(u => u.Login == l && (staff ? u.Role == "Admin" || u.Role == "Secretary" : u.Role == "Student"));
     }
 }

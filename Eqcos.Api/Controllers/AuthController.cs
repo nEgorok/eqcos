@@ -112,8 +112,8 @@ public class AuthController : ControllerBase
         if (result == PasswordVerificationResult.Failed)
             return Unauthorized("Неверный логин или пароль");
         // студент — только через студенческое окно, админ — только через окно сотрудников
-        var isAdmin = user.Role == "Admin";
-        if (isAdmin != r.Staff)
+        var isStaff = user.Role == "Admin" || user.Role == "Secretary";   // заведующая или секретарь
+        if (isStaff != r.Staff)
             return Unauthorized("Неверный логин или пароль");
         // заблокирована за подозрительные действия — говорим только при верном пароле
         if (user.Blocked)

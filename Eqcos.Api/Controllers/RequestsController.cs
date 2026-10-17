@@ -14,7 +14,7 @@ public record MoveRequest(int OfficeId);   // передать заявку в �
 // заявки: новые регистрации и изменения данных (в том числе перевод в другой корпус)
 [ApiController]
 [Route("api/requests")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Secretary")]   // заявки проверяет секретарь
 public class RequestsController : ControllerBase
 {
     private readonly AppDbContext _db;

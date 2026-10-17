@@ -72,7 +72,7 @@ else
             {
                 <h5>Мои данные</h5>
 
-                @if (profile.Role == "Admin")
+                @if (profile.Role == "Admin" || profile.Role == "Secretary")
                 {
                     <div class="eq-row"><span class="text-muted">Учётная запись</span><span>@profile.Login</span></div>
                     <div class="eq-row"><span class="text-muted">Название</span><span>@profile.FullName</span></div>
